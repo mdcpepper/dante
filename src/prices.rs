@@ -3,7 +3,7 @@
 use std::ops::Deref;
 
 /// Represents a price in pence/cents.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Price {
     value: u64,
 }
