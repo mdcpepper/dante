@@ -298,12 +298,10 @@ mod tests {
 
     #[test]
     fn percent_of_minor_overflow_returns_error() {
-        let percent = unsafe {
-            // SAFETY: PercentageDecimal is a single-field wrapper around f64.
-            //         We construct an out-of-range percentage purely to
-            //         exercise overflow handling in tests.
-            std::mem::transmute::<f64, PercentageDecimal>(2.0)
-        };
+        // SAFETY: PercentageDecimal is a single-field wrapper around f64.
+        //         We construct an out-of-range percentage purely to
+        //         exercise overflow handling in tests.
+        let percent = unsafe { std::mem::transmute::<f64, PercentageDecimal>(2.0) };
 
         let result = percent_of_minor(&percent, i64::MAX);
 
@@ -312,12 +310,10 @@ mod tests {
 
     #[test]
     fn percent_of_minor_checked_mul_overflow_returns_error() {
-        let percent = unsafe {
-            // SAFETY: PercentageDecimal is a single-field wrapper around f64.
-            //         1e20 is representable as a Decimal, but multiplying by a
-            //         very large minor value should overflow the Decimal range.
-            std::mem::transmute::<f64, PercentageDecimal>(1e20)
-        };
+        // SAFETY: PercentageDecimal is a single-field wrapper around f64.
+        //         1e20 is representable as a Decimal, but multiplying by a
+        //         very large minor value should overflow the Decimal range.
+        let percent = unsafe { std::mem::transmute::<f64, PercentageDecimal>(1e20) };
 
         let result = percent_of_minor(&percent, i64::MAX);
 
@@ -326,12 +322,10 @@ mod tests {
 
     #[test]
     fn percent_of_minor_underflow_returns_error() {
-        let percent = unsafe {
-            // SAFETY: PercentageDecimal is a single-field wrapper around f64.
-            //         We construct an out-of-range percentage purely to
-            //         exercise underflow handling in tests.
-            std::mem::transmute::<f64, PercentageDecimal>(2.0)
-        };
+        // SAFETY: PercentageDecimal is a single-field wrapper around f64.
+        //         We construct an out-of-range percentage purely to
+        //         exercise underflow handling in tests.
+        let percent = unsafe { std::mem::transmute::<f64, PercentageDecimal>(2.0) };
 
         let result = percent_of_minor(&percent, i64::MIN);
 

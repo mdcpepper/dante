@@ -36,19 +36,20 @@ pub fn total_price<'a>(items: &[Item<'a>]) -> Result<Money<'a, iso::Currency>, T
 
 #[cfg(test)]
 mod tests {
+    use testresult::TestResult;
+
     use super::*;
 
     #[test]
-    fn test_total_price() {
+    fn test_total_price() -> TestResult {
         let items = [
             Item::new(Money::from_minor(100, iso::USD)),
             Item::new(Money::from_minor(200, iso::USD)),
         ];
 
-        assert_eq!(
-            total_price(&items).unwrap(),
-            Money::from_minor(300, iso::USD)
-        );
+        assert_eq!(total_price(&items)?, Money::from_minor(300, iso::USD));
+
+        Ok(())
     }
 
     #[test]
