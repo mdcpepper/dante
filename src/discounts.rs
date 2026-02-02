@@ -14,6 +14,7 @@ use thiserror::Error;
 use crate::{
     items::{Item, cheapest_item},
     pricing::{TotalPriceError, total_price},
+    tags::collection::TagCollection,
 };
 
 /// Errors specific to discount calculations.
@@ -86,9 +87,9 @@ impl fmt::Debug for Discount<'_> {
 ///   (`DiscountError::PercentConversion`).
 /// - underlying money arithmetic fails (for example, due to currency mismatch)
 ///   (`DiscountError::Money`).
-pub fn calculate_discount<'a>(
+pub fn calculate_discount<'a, T: TagCollection>(
     discount: &Discount<'a>,
-    items: &'a [Item<'a>],
+    items: &'a [Item<'a, T>],
 ) -> Result<Money<'a, Currency>, DiscountError> {
     match discount {
         Discount::PriceOverrideAllItems(price) => {
@@ -118,7 +119,7 @@ pub fn calculate_discount<'a>(
 }
 
 /// Return `NoItems` if the slice is empty.
-fn ensure_not_empty(items: &[Item<'_>]) -> Result<(), DiscountError> {
+fn ensure_not_empty<T: TagCollection>(items: &[Item<'_, T>]) -> Result<(), DiscountError> {
     if items.is_empty() {
         Err(DiscountError::NoItems)
     } else {
@@ -127,14 +128,16 @@ fn ensure_not_empty(items: &[Item<'_>]) -> Result<(), DiscountError> {
 }
 
 /// Fetch the cheapest item or surface `NoItems`.
-fn require_cheapest<'a>(items: &'a [Item<'a>]) -> Result<&'a Item<'a>, DiscountError> {
+fn require_cheapest<'a, T: TagCollection>(
+    items: &'a [Item<'a, T>],
+) -> Result<&'a Item<'a, T>, DiscountError> {
     cheapest_item(items).ok_or(DiscountError::NoItems)
 }
 
 /// Compute total once and return it alongside the cheapest item.
-fn totals_with_cheapest<'a>(
-    items: &'a [Item<'a>],
-) -> Result<(Money<'a, Currency>, &'a Item<'a>), DiscountError> {
+fn totals_with_cheapest<'a, T: TagCollection>(
+    items: &'a [Item<'a, T>],
+) -> Result<(Money<'a, Currency>, &'a Item<'a, T>), DiscountError> {
     let cheapest = require_cheapest(items)?;
     let total = total_price(items)?;
 

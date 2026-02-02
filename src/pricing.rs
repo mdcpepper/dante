@@ -3,7 +3,7 @@
 use rusty_money::{Money, MoneyError, iso};
 use thiserror::Error;
 
-use crate::items::Item;
+use crate::{items::Item, tags::collection::TagCollection};
 
 /// Errors that can occur while calculating total price.
 #[derive(Debug, Error, PartialEq)]
@@ -23,7 +23,9 @@ pub enum TotalPriceError {
 ///
 /// - [`TotalPriceError::NoItems`]: No items were provided, so currency could not be determined.
 /// - [`TotalPriceError::Money`]: Wrapped money arithmetic or currency mismatch error.
-pub fn total_price<'a>(items: &[Item<'a>]) -> Result<Money<'a, iso::Currency>, TotalPriceError> {
+pub fn total_price<'a, T: TagCollection>(
+    items: &[Item<'a, T>],
+) -> Result<Money<'a, iso::Currency>, TotalPriceError> {
     let first = items.first().ok_or(TotalPriceError::NoItems)?;
 
     let total = items.iter().try_fold(
@@ -38,11 +40,13 @@ pub fn total_price<'a>(items: &[Item<'a>]) -> Result<Money<'a, iso::Currency>, T
 mod tests {
     use testresult::TestResult;
 
+    use crate::tags::string::StringTagCollection;
+
     use super::*;
 
     #[test]
     fn test_total_price() -> TestResult {
-        let items = [
+        let items: [Item<'_, StringTagCollection>; 2] = [
             Item::new(Money::from_minor(100, iso::USD)),
             Item::new(Money::from_minor(200, iso::USD)),
         ];

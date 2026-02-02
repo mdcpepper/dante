@@ -6,6 +6,7 @@ use thiserror::Error;
 use crate::{
     items::Item,
     pricing::{TotalPriceError, total_price},
+    tags::{collection::TagCollection, string::StringTagCollection},
 };
 
 /// Errors related to basket construction or totals.
@@ -18,12 +19,12 @@ pub enum BasketError {
 
 /// Basket
 #[derive(Debug)]
-pub struct Basket<'a> {
-    items: Vec<Item<'a>>,
+pub struct Basket<'a, T: TagCollection = StringTagCollection> {
+    items: Vec<Item<'a, T>>,
     currency: &'static Currency,
 }
 
-impl<'a> Basket<'a> {
+impl<'a, T: TagCollection> Basket<'a, T> {
     /// Create a new basket with the given items.
     pub fn new(currency: &'static Currency) -> Self {
         Basket {
@@ -38,13 +39,14 @@ impl<'a> Basket<'a> {
     ///
     /// Returns a `BasketError` if there was a currency mismatch error.
     pub fn with_items(
-        items: impl Into<Vec<Item<'a>>>,
+        items: impl Into<Vec<Item<'a, T>>>,
         currency: &'static Currency,
     ) -> Result<Self, BasketError> {
         let items = items.into();
 
         items.iter().enumerate().try_for_each(|(i, item)| {
             let item_currency = item.price().currency();
+
             if item_currency == currency {
                 Ok(())
             } else {
@@ -105,7 +107,7 @@ mod tests {
 
     #[test]
     fn new_with_currency() {
-        let basket = Basket::new(iso::GBP);
+        let basket = Basket::<'_, StringTagCollection>::new(iso::GBP);
 
         assert_eq!(basket.currency, iso::GBP);
     }
@@ -117,7 +119,7 @@ mod tests {
             Item::new(Money::from_minor(100, iso::USD)),
         ];
 
-        let result = Basket::with_items(items, iso::GBP);
+        let result = Basket::<'_, StringTagCollection>::with_items(items, iso::GBP);
 
         match result {
             Err(BasketError::CurrencyMismatch(idx, item_currency, basket_currency)) => {
@@ -148,7 +150,7 @@ mod tests {
             Item::new(Money::from_minor(200, iso::GBP)),
         ];
 
-        let basket = Basket::with_items(items, iso::GBP)?;
+        let basket = Basket::<'_, StringTagCollection>::with_items(items, iso::GBP)?;
 
         assert_eq!(basket.subtotal()?, Money::from_minor(300, iso::GBP));
 
@@ -157,7 +159,7 @@ mod tests {
 
     #[test]
     fn subtotal_with_no_items() -> TestResult {
-        let basket = Basket::new(iso::GBP);
+        let basket = Basket::<'_, StringTagCollection>::new(iso::GBP);
 
         assert_eq!(basket.subtotal()?, Money::from_minor(0, iso::GBP));
 
@@ -177,7 +179,7 @@ mod tests {
 
     #[test]
     fn is_empty() -> TestResult {
-        let empty_basket = Basket::with_items([], iso::GBP)?;
+        let empty_basket = Basket::<'_, StringTagCollection>::with_items([], iso::GBP)?;
         let non_empty_basket = Basket::with_items(test_items(), iso::GBP)?;
 
         assert!(empty_basket.is_empty());
