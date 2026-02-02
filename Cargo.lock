@@ -188,6 +188,7 @@ dependencies = [
  "good_lp",
  "num-traits",
  "rust_decimal",
+ "rustc-hash",
  "rusty-money",
  "smallvec",
  "testresult",

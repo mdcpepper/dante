@@ -5,9 +5,12 @@ use rusty_money::{Money, MoneyError, iso};
 use smallvec::SmallVec;
 use thiserror::Error;
 
-use crate::basket::{Basket, BasketError};
+use crate::{
+    basket::{Basket, BasketError},
+    promotions::Promotion,
+};
 
-pub mod milp;
+pub mod ilp;
 
 /// Solver Errors
 #[derive(Debug, Error)]
@@ -32,6 +35,13 @@ pub enum SolverError {
     /// Wrapped solver resolution error
     #[error(transparent)]
     ResolutionError(#[from] ResolutionError),
+
+    /// Internal solver invariant was violated (this is a bug).
+    #[error("solver invariant violated: {message}")]
+    InvariantViolation {
+        /// What invariant was violated
+        message: &'static str,
+    },
 }
 
 /// Result of the promotion solution for the given items
@@ -54,5 +64,9 @@ pub trait Solver {
     /// # Errors
     ///
     /// Returns a [`SolverError`] if the solver encounters an error.
-    fn solve<'a>(basket: &'a Basket<'a>, items: &[usize]) -> Result<SolverResult<'a>, SolverError>;
+    fn solve<'a>(
+        promotions: &'a [Promotion<'_>],
+        basket: &'a Basket<'a>,
+        items: &[usize],
+    ) -> Result<SolverResult<'a>, SolverError>;
 }
