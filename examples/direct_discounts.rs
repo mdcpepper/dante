@@ -25,7 +25,7 @@ pub fn main() -> Result<()> {
     let fixture = Fixture::from_set("example_direct_discounts")?;
 
     let basket = fixture.basket()?;
-    let item_group: ItemGroup<'_> = ItemGroup::from(&basket);
+    let item_group = ItemGroup::from(&basket);
     let promotions = fixture.promotions();
 
     let start = Instant::now();
