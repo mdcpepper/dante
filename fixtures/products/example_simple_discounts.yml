@@ -1,0 +1,15 @@
+products:
+  sandwich:
+    name: Sandwich
+    tags: []
+    price: 2.99 GBP
+
+  drink:
+    name: Drink
+    tags: ["20-off"]
+    price: 1.29 GBP
+
+  snack:
+    name: Snack
+    tags: ["20-off", "40-off"]
+    price: 0.79 GBP
