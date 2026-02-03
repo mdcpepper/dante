@@ -8,7 +8,7 @@ optimisation engine written in Rust.
 ## Discounts
 
 Percentage or fixed-amount discounts can be applied to either an entire collection 
-of items, or the cheapest one.
+of items, or the cheapest one in the bundle.
 
 ## Promotions
 

@@ -153,12 +153,17 @@ impl<'a> PromotionInstance<'a> {
     ///
     /// Reads the solved variable values to determine which items this promotion selected and
     /// returns [`PromotionApplication`] instances with bundle IDs and price details.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SolverError`] if a selected item index is invalid (missing from the item group),
+    /// or if the discount for a selected item cannot be computed.
     pub fn calculate_item_applications<'group>(
         &self,
         solution: &dyn Solution,
         item_group: &'group ItemGroup<'_>,
         next_bundle_id: &mut usize,
-    ) -> SmallVec<[PromotionApplication<'group>; 10]> {
+    ) -> Result<SmallVec<[PromotionApplication<'group>; 10]>, SolverError> {
         match &self.promotion {
             Promotion::SimpleDiscount(simple) => simple.calculate_item_applications(
                 self.promotion.key(),
@@ -278,8 +283,7 @@ pub trait ILPPromotion: Send + Sync {
     ///
     /// # Errors
     ///
-    /// Returns [`SolverError`] if a selected item index is invalid (missing from the item group),
-    /// or if the discount for a selected item cannot be computed.
+    /// Returns [`SolverError`] if the discount for a selected item cannot be computed.
     fn calculate_item_discounts(
         &self,
         solution: &dyn Solution,
@@ -298,6 +302,10 @@ pub trait ILPPromotion: Send + Sync {
     ///
     /// The `next_bundle_id` counter is passed mutably and should be incremented
     /// for each new bundle created. This ensures unique IDs across all promotions.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SolverError`] if the discount for a selected item cannot be computed.
     fn calculate_item_applications<'group>(
         &self,
         promotion_key: PromotionKey,
@@ -305,7 +313,7 @@ pub trait ILPPromotion: Send + Sync {
         vars: &dyn PromotionVars,
         item_group: &'group ItemGroup<'_>,
         next_bundle_id: &mut usize,
-    ) -> SmallVec<[PromotionApplication<'group>; 10]>;
+    ) -> Result<SmallVec<[PromotionApplication<'group>; 10]>, SolverError>;
 }
 
 /// No-op promotion variables implementation
