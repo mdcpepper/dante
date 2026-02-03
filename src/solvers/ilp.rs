@@ -107,7 +107,7 @@ impl Solver for ILPSolver {
         // Extract which items each promotion selected and their discounted prices
         for instance in promotion_instances.iter() {
             let apps =
-                instance.calculate_item_applications(&solution, item_group, &mut next_bundle_id);
+                instance.calculate_item_applications(&solution, item_group, &mut next_bundle_id)?;
 
             let (applied_items, updated_used_items, updated_total) =
                 apply_promotion_applications(item_group.len(), used_items, total, &apps)?;

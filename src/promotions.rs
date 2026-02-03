@@ -37,10 +37,10 @@ impl Promotion<'_> {
         }
     }
 
-    /// Return whether this promotion *might* apply to the given item group.
+    /// Return whether this promotion _might_ apply to the given item group.
     pub fn is_applicable(&self, item_group: &ItemGroup<'_>) -> bool {
         match self {
-            Promotion::SimpleDiscount(simple_disount) => simple_disount.is_applicable(item_group),
+            Promotion::SimpleDiscount(simple_discount) => simple_discount.is_applicable(item_group),
         }
     }
 }

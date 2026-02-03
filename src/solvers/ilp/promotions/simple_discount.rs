@@ -26,6 +26,10 @@ use crate::{
     tags::collection::TagCollection,
 };
 
+/// Solver variables for a simple discount promotion.
+///
+/// Tracks the mapping from item group indices to their corresponding
+/// binary decision variables in the ILP model.
 #[derive(Debug)]
 pub struct SimpleDiscountVars {
     item_vars: SmallVec<[(usize, Variable); 10]>,
@@ -160,7 +164,7 @@ impl ILPPromotion for SimpleDiscount<'_> {
         vars: &dyn PromotionVars,
         item_group: &'group ItemGroup<'_>,
         next_bundle_id: &mut usize,
-    ) -> SmallVec<[PromotionApplication<'group>; 10]> {
+    ) -> Result<SmallVec<[PromotionApplication<'group>; 10]>, SolverError> {
         let mut applications = SmallVec::new();
         let currency = item_group.currency();
 
@@ -169,11 +173,9 @@ impl ILPPromotion for SimpleDiscount<'_> {
                 continue;
             }
 
-            let discounted_minor = match calculate_discount(self.discount(), slice::from_ref(item))
-            {
-                Ok(price) => price.to_minor_units(),
-                Err(_) => continue,
-            };
+            let discounted_minor = calculate_discount(self.discount(), slice::from_ref(item))
+                .map(|price| price.to_minor_units())
+                .map_err(SolverError::from)?;
 
             let original_minor = item.price().to_minor_units();
 
@@ -190,7 +192,7 @@ impl ILPPromotion for SimpleDiscount<'_> {
             });
         }
 
-        applications
+        Ok(applications)
     }
 }
 
@@ -390,7 +392,7 @@ mod tests {
     }
 
     #[test]
-    fn calculate_item_applications_returns_applications_with_unique_bundle_ids() {
+    fn calculate_item_applications_returns_applications_with_unique_bundle_ids() -> TestResult {
         let items = [
             Item::new(ProductKey::default(), Money::from_minor(100, iso::GBP)),
             Item::new(ProductKey::default(), Money::from_minor(200, iso::GBP)),
@@ -414,7 +416,7 @@ mod tests {
             &vars,
             &item_group,
             &mut next_bundle_id,
-        );
+        )?;
 
         // Should have 2 applications
         assert_eq!(apps.len(), 2);
@@ -443,10 +445,12 @@ mod tests {
             apps.get(1).map(|a| a.final_price),
             Some(Money::from_minor(50, iso::GBP))
         );
+
+        Ok(())
     }
 
     #[test]
-    fn calculate_item_applications_skips_on_discount_error() {
+    fn calculate_item_applications_returns_error_on_discount_error() {
         let items = [Item::new(
             ProductKey::default(),
             Money::from_minor(100, iso::GBP),
@@ -472,14 +476,12 @@ mod tests {
             &mut next_bundle_id,
         );
 
-        assert!(apps.is_empty());
-
-        // next_bundle_id should not have been incremented
+        assert!(matches!(apps, Err(SolverError::Discount(_))));
         assert_eq!(next_bundle_id, 0);
     }
 
     #[test]
-    fn calculate_item_applications_continues_bundle_id_counter() {
+    fn calculate_item_applications_continues_bundle_id_counter() -> TestResult {
         let items = [Item::new(
             ProductKey::default(),
             Money::from_minor(100, iso::GBP),
@@ -504,10 +506,12 @@ mod tests {
             &vars,
             &item_group,
             &mut next_bundle_id,
-        );
+        )?;
 
         assert_eq!(apps.len(), 1);
         assert_eq!(apps.first().map(|a| a.bundle_id), Some(5));
         assert_eq!(next_bundle_id, 6);
+
+        Ok(())
     }
 }
