@@ -223,4 +223,25 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn get_item_returns_item() -> TestResult {
+        let items = test_items();
+
+        let basket = Basket::with_items(items, iso::GBP)?;
+        let item = basket.get_item(1)?;
+
+        assert_eq!(item.price().to_minor_units(), 200);
+
+        Ok(())
+    }
+
+    #[test]
+    fn get_item_missing_returns_error() {
+        let basket = Basket::<'_, StringTagCollection>::new(iso::GBP);
+
+        let err = basket.get_item(0).err();
+
+        assert!(matches!(err, Some(BasketError::ItemNotFound(0))));
+    }
 }

@@ -13,12 +13,11 @@ use anyhow::{Result, anyhow};
 use decimal_percentage::Percentage;
 use rusty_money::{Money, iso};
 use slotmap::SlotMap;
-use smallvec::SmallVec;
 
 use dante::{
     basket::Basket,
     discounts::Discount,
-    items::Item,
+    items::{Item, groups::ItemGroup},
     products::{Product, ProductKey},
     promotions::{Promotion, PromotionKey, PromotionMeta, simple_discount::SimpleDiscount},
     receipt::Receipt,
@@ -97,13 +96,11 @@ pub fn main() -> Result<()> {
 
     let basket = Basket::with_items(&items, iso::GBP)?;
 
+    let item_group = ItemGroup::from(&basket);
+
     let start = Instant::now();
 
-    let result = ILPSolver::solve(
-        &promotions,
-        &basket,
-        &(0..basket.len()).collect::<SmallVec<[usize; 2]>>(),
-    )?;
+    let result = ILPSolver::solve(&promotions, &item_group)?;
 
     let elapsed = start.elapsed().as_secs_f32();
 

@@ -6,7 +6,7 @@ use good_lp::{Expression, ProblemVariables, Variable};
 use smallvec::SmallVec;
 
 use crate::{
-    basket::Basket,
+    items::groups::ItemGroup,
     solvers::{SolverError, ilp::build_presence_variables_and_objective},
 };
 
@@ -54,12 +54,9 @@ impl ILPState {
     ///
     /// Returns [`SolverError`] if any item's price cannot be represented exactly as
     /// a solver coefficient.
-    pub fn with_presence_variables(
-        basket: &Basket<'_>,
-        items: &[usize],
-    ) -> Result<Self, SolverError> {
+    pub fn with_presence_variables(item_group: &ItemGroup<'_>) -> Result<Self, SolverError> {
         let mut pb = ProblemVariables::new();
-        let (item_presence, cost) = build_presence_variables_and_objective(basket, items, &mut pb)?;
+        let (item_presence, cost) = build_presence_variables_and_objective(item_group, &mut pb)?;
 
         Ok(Self {
             pb,
@@ -77,7 +74,7 @@ impl ILPState {
     ///
     /// Tells the solver "if you choose this option (set this variable to 1), add this
     /// cost to the total". The solver compares all options and picks the combination
-    /// that minimizes the basket total.
+    /// that minimizes the item group total.
     pub fn add_to_objective(&mut self, var: Variable, coefficient: f64) {
         self.cost += var * coefficient;
     }
@@ -87,5 +84,23 @@ impl ILPState {
     /// Used to add new decision variables to the ILP problem.
     pub fn problem_variables_mut(&mut self) -> &mut ProblemVariables {
         &mut self.pb
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use good_lp::{Expression, ProblemVariables};
+
+    use super::*;
+
+    #[test]
+    fn debug_includes_item_presence_len() {
+        let state = ILPState::new(ProblemVariables::new(), Expression::default());
+
+        let formatted = format!("{state:?}");
+
+        assert!(formatted.contains("ILPState"));
+        assert!(formatted.contains("item_presence"));
+        assert!(formatted.contains("0 variables"));
     }
 }

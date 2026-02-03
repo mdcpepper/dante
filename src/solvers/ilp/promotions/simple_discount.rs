@@ -10,8 +10,8 @@ use smallvec::SmallVec;
 use rusty_money::Money;
 
 use crate::{
-    basket::Basket,
     discounts::calculate_discount,
+    items::groups::ItemGroup,
     promotions::{
         PromotionKey, applications::PromotionApplication, simple_discount::SimpleDiscount,
     },
@@ -51,9 +51,9 @@ impl PromotionVars for SimpleDiscountVars {
     }
 }
 
-impl<'a> ILPPromotion<'a> for SimpleDiscount<'a> {
-    fn is_applicable(&self, basket: &'a Basket<'a>, items: &[usize]) -> bool {
-        if items.is_empty() {
+impl ILPPromotion for SimpleDiscount<'_> {
+    fn is_applicable(&self, item_group: &ItemGroup<'_>) -> bool {
+        if item_group.is_empty() {
             return false;
         }
 
@@ -63,30 +63,24 @@ impl<'a> ILPPromotion<'a> for SimpleDiscount<'a> {
             return true;
         }
 
-        items.iter().copied().any(|item_idx| {
-            basket
-                .get_item(item_idx)
-                .map(|item| item.tags().intersects(promotion_tags))
-                .unwrap_or(false)
-        })
+        item_group
+            .iter()
+            .any(|item| item.tags().intersects(promotion_tags))
     }
 
     fn add_variables(
         &self,
-        basket: &'a Basket<'a>,
-        items: &[usize],
+        item_group: &ItemGroup<'_>,
         state: &mut ILPState,
     ) -> Result<Box<dyn PromotionVars>, SolverError> {
         // An empty tag set means this promotion can target any item, so we can skip tag checks
         // if that is the case.
         let match_all = self.tags().is_empty();
 
-        // Keep the mapping from basket item index -> solver variable so we can interpret solutions later.
+        // Keep the mapping from item group index -> solver variable so we can interpret solutions later.
         let mut item_vars: SmallVec<[(usize, Variable); 10]> = SmallVec::new();
 
-        for &item_idx in items {
-            let item = basket.get_item(item_idx).map_err(SolverError::from)?;
-
+        for (item_idx, item) in item_group.iter().enumerate() {
             // Enforce the promotion's tagging rules up-front so the solver doesn't need extra constraints.
             if !match_all && !item.tags().intersects(self.tags()) {
                 continue;
@@ -126,8 +120,7 @@ impl<'a> ILPPromotion<'a> for SimpleDiscount<'a> {
         &self,
         model: S,
         _vars: &dyn PromotionVars,
-        _basket: &'a Basket<'a>,
-        _items: &[usize],
+        _item_group: &ItemGroup<'_>,
     ) -> S {
         // Return the model without any additional constraints
         model
@@ -137,17 +130,14 @@ impl<'a> ILPPromotion<'a> for SimpleDiscount<'a> {
         &self,
         solution: &dyn Solution,
         vars: &dyn PromotionVars,
-        basket: &'a Basket<'a>,
-        items: &[usize],
+        item_group: &ItemGroup<'_>,
     ) -> Result<FxHashMap<usize, (i64, i64)>, SolverError> {
         let mut discounts = FxHashMap::default();
 
-        for &item_idx in items {
+        for (item_idx, item) in item_group.iter().enumerate() {
             if !vars.is_item_selected(solution, item_idx) {
                 continue;
             }
-
-            let item = basket.get_item(item_idx).map_err(SolverError::from)?;
 
             // This must mirror the discounted minor unit value used during variable creation.
             // If we can't compute it here, something is inconsistent and should be surfaced.
@@ -163,26 +153,21 @@ impl<'a> ILPPromotion<'a> for SimpleDiscount<'a> {
         Ok(discounts)
     }
 
-    fn calculate_item_applications(
+    fn calculate_item_applications<'group>(
         &self,
         promotion_key: PromotionKey,
         solution: &dyn Solution,
         vars: &dyn PromotionVars,
-        basket: &'a Basket<'a>,
-        items: &[usize],
+        item_group: &'group ItemGroup<'_>,
         next_bundle_id: &mut usize,
-    ) -> SmallVec<[PromotionApplication<'a>; 10]> {
+    ) -> SmallVec<[PromotionApplication<'group>; 10]> {
         let mut applications = SmallVec::new();
-        let currency = basket.currency();
+        let currency = item_group.currency();
 
-        for &item_idx in items {
+        for (item_idx, item) in item_group.iter().enumerate() {
             if !vars.is_item_selected(solution, item_idx) {
                 continue;
             }
-
-            let Ok(item) = basket.get_item(item_idx) else {
-                continue;
-            };
 
             let discounted_minor = match calculate_discount(self.discount(), slice::from_ref(item))
             {
@@ -221,12 +206,12 @@ mod tests {
 
     use good_lp::{Expression, ProblemVariables, Solution, Variable};
     use rusty_money::{Money, iso};
+    use smallvec::SmallVec;
     use testresult::TestResult;
 
     use crate::{
-        basket::Basket,
         discounts::Discount,
-        items::Item,
+        items::{Item, groups::ItemGroup},
         products::ProductKey,
         promotions::PromotionKey,
         solvers::{SolverError, ilp::promotions::ILPPromotion},
@@ -234,6 +219,14 @@ mod tests {
     };
 
     use super::{ILPState, PromotionVars, SimpleDiscount};
+
+    fn item_group_from_items<const N: usize>(items: [Item<'_>; N]) -> ItemGroup<'_> {
+        let currency = items
+            .first()
+            .map_or(iso::GBP, |item| item.price().currency());
+
+        ItemGroup::new(items.into_iter().collect(), currency)
+    }
 
     #[derive(Debug)]
     struct AlwaysSelectedVars;
@@ -262,8 +255,8 @@ mod tests {
     }
 
     #[test]
-    fn is_applicable_returns_false_for_empty_items() -> TestResult {
-        let basket = Basket::with_items([], iso::GBP)?;
+    fn is_applicable_returns_false_for_empty_items() {
+        let item_group: ItemGroup<'_> = ItemGroup::new(SmallVec::new(), iso::GBP);
 
         let promo = SimpleDiscount::new(
             PromotionKey::default(),
@@ -271,44 +264,17 @@ mod tests {
             Discount::SetBundleTotalPrice(Money::from_minor(50, iso::GBP)),
         );
 
-        assert!(!promo.is_applicable(&basket, &[]));
-
-        Ok(())
+        assert!(!promo.is_applicable(&item_group));
     }
 
     #[test]
-    fn add_variables_errors_on_missing_item_indices() -> TestResult {
+    fn add_variables_errors_on_discount_error() {
         let items = [Item::new(
             ProductKey::default(),
             Money::from_minor(100, iso::GBP),
         )];
 
-        let basket = Basket::with_items(items, iso::GBP)?;
-
-        let promo = SimpleDiscount::new(
-            PromotionKey::default(),
-            StringTagCollection::empty(),
-            Discount::SetBundleTotalPrice(Money::from_minor(50, iso::GBP)),
-        );
-
-        let pb = ProblemVariables::new();
-        let cost = Expression::default();
-        let mut state = ILPState::new(pb, cost);
-        let result = promo.add_variables(&basket, &[0, 1], &mut state);
-
-        assert!(matches!(result, Err(SolverError::Basket(_))));
-
-        Ok(())
-    }
-
-    #[test]
-    fn add_variables_errors_on_discount_error() -> TestResult {
-        let items = [Item::new(
-            ProductKey::default(),
-            Money::from_minor(100, iso::GBP),
-        )];
-
-        let basket = Basket::with_items(items, iso::GBP)?;
+        let item_group = item_group_from_items(items);
 
         let promo = SimpleDiscount::new(
             PromotionKey::default(),
@@ -319,21 +285,19 @@ mod tests {
         let pb = ProblemVariables::new();
         let cost = Expression::default();
         let mut state = ILPState::new(pb, cost);
-        let result = promo.add_variables(&basket, &[0], &mut state);
+        let result = promo.add_variables(&item_group, &mut state);
 
         assert!(matches!(result, Err(SolverError::Discount(_))));
-
-        Ok(())
     }
 
     #[test]
-    fn add_variables_errors_on_nonrepresentable_minor_units() -> TestResult {
+    fn add_variables_errors_on_nonrepresentable_minor_units() {
         let items = [Item::new(
             ProductKey::default(),
             Money::from_minor(100, iso::GBP),
         )];
 
-        let basket = Basket::with_items(items, iso::GBP)?;
+        let item_group = item_group_from_items(items);
 
         let promo = SimpleDiscount::new(
             PromotionKey::default(),
@@ -344,49 +308,22 @@ mod tests {
         let pb = ProblemVariables::new();
         let cost = Expression::default();
         let mut state = ILPState::new(pb, cost);
-        let result = promo.add_variables(&basket, &[0], &mut state);
+        let result = promo.add_variables(&item_group, &mut state);
 
         assert!(matches!(
             result,
             Err(SolverError::MinorUnitsNotRepresentable { .. })
         ));
-
-        Ok(())
     }
 
     #[test]
-    fn calculate_item_discounts_skips_missing_items() -> TestResult {
+    fn calculate_item_discounts_skips_on_discount_error() {
         let items = [Item::new(
             ProductKey::default(),
             Money::from_minor(100, iso::GBP),
         )];
 
-        let basket = Basket::with_items(items, iso::GBP)?;
-
-        let promo = SimpleDiscount::new(
-            PromotionKey::default(),
-            StringTagCollection::empty(),
-            Discount::SetBundleTotalPrice(Money::from_minor(50, iso::GBP)),
-        );
-
-        let vars = AlwaysSelectedVars;
-        let solution: HashMap<Variable, f64> = HashMap::new();
-
-        let result = promo.calculate_item_discounts(&solution, &vars, &basket, &[1]);
-
-        assert!(matches!(result, Err(SolverError::Basket(_))));
-
-        Ok(())
-    }
-
-    #[test]
-    fn calculate_item_discounts_skips_on_discount_error() -> TestResult {
-        let items = [Item::new(
-            ProductKey::default(),
-            Money::from_minor(100, iso::GBP),
-        )];
-
-        let basket = Basket::with_items(items, iso::GBP)?;
+        let item_group = item_group_from_items(items);
 
         let promo = SimpleDiscount::new(
             PromotionKey::default(),
@@ -397,11 +334,9 @@ mod tests {
         let vars = AlwaysSelectedVars;
         let solution: HashMap<Variable, f64> = HashMap::new();
 
-        let result = promo.calculate_item_discounts(&solution, &vars, &basket, &[0]);
+        let result = promo.calculate_item_discounts(&solution, &vars, &item_group);
 
         assert!(matches!(result, Err(SolverError::Discount(_))));
-
-        Ok(())
     }
 
     #[test]
@@ -411,7 +346,7 @@ mod tests {
             Money::from_minor(100, iso::GBP),
         )];
 
-        let basket = Basket::with_items(items, iso::GBP)?;
+        let item_group = item_group_from_items(items);
 
         let promo = SimpleDiscount::new(
             PromotionKey::default(),
@@ -422,7 +357,7 @@ mod tests {
         let vars = NeverSelectedVars;
         let solution: HashMap<Variable, f64> = HashMap::new();
 
-        let discounts = promo.calculate_item_discounts(&solution, &vars, &basket, &[0])?;
+        let discounts = promo.calculate_item_discounts(&solution, &vars, &item_group)?;
 
         assert!(discounts.is_empty());
 
@@ -436,7 +371,7 @@ mod tests {
             Money::from_minor(100, iso::GBP),
         )];
 
-        let basket = Basket::with_items(items, iso::GBP)?;
+        let item_group = item_group_from_items(items);
 
         let promo = SimpleDiscount::new(
             PromotionKey::default(),
@@ -447,7 +382,7 @@ mod tests {
         let vars = AlwaysSelectedVars;
         let solution: HashMap<Variable, f64> = HashMap::new();
 
-        let discounts = promo.calculate_item_discounts(&solution, &vars, &basket, &[0])?;
+        let discounts = promo.calculate_item_discounts(&solution, &vars, &item_group)?;
 
         assert_eq!(discounts.get(&0), Some(&(100, 50)));
 
@@ -455,13 +390,13 @@ mod tests {
     }
 
     #[test]
-    fn calculate_item_applications_returns_applications_with_unique_bundle_ids() -> TestResult {
+    fn calculate_item_applications_returns_applications_with_unique_bundle_ids() {
         let items = [
             Item::new(ProductKey::default(), Money::from_minor(100, iso::GBP)),
             Item::new(ProductKey::default(), Money::from_minor(200, iso::GBP)),
         ];
 
-        let basket = Basket::with_items(items, iso::GBP)?;
+        let item_group = item_group_from_items(items);
 
         let promo = SimpleDiscount::new(
             PromotionKey::default(),
@@ -477,8 +412,7 @@ mod tests {
             PromotionKey::default(),
             &solution,
             &vars,
-            &basket,
-            &[0, 1],
+            &item_group,
             &mut next_bundle_id,
         );
 
@@ -509,54 +443,16 @@ mod tests {
             apps.get(1).map(|a| a.final_price),
             Some(Money::from_minor(50, iso::GBP))
         );
-
-        Ok(())
     }
 
     #[test]
-    fn calculate_item_applications_skips_missing_items() -> TestResult {
+    fn calculate_item_applications_skips_on_discount_error() {
         let items = [Item::new(
             ProductKey::default(),
             Money::from_minor(100, iso::GBP),
         )];
 
-        let basket = Basket::with_items(items, iso::GBP)?;
-
-        let promo = SimpleDiscount::new(
-            PromotionKey::default(),
-            StringTagCollection::empty(),
-            Discount::SetBundleTotalPrice(Money::from_minor(50, iso::GBP)),
-        );
-
-        let vars = AlwaysSelectedVars;
-        let solution: HashMap<Variable, f64> = HashMap::new();
-        let mut next_bundle_id = 0_usize;
-
-        let apps = promo.calculate_item_applications(
-            PromotionKey::default(),
-            &solution,
-            &vars,
-            &basket,
-            &[1],
-            &mut next_bundle_id,
-        );
-
-        assert!(apps.is_empty());
-
-        // next_bundle_id should not have been incremented
-        assert_eq!(next_bundle_id, 0);
-
-        Ok(())
-    }
-
-    #[test]
-    fn calculate_item_applications_skips_on_discount_error() -> TestResult {
-        let items = [Item::new(
-            ProductKey::default(),
-            Money::from_minor(100, iso::GBP),
-        )];
-
-        let basket = Basket::with_items(items, iso::GBP)?;
+        let item_group = item_group_from_items(items);
 
         let promo = SimpleDiscount::new(
             PromotionKey::default(),
@@ -572,26 +468,24 @@ mod tests {
             PromotionKey::default(),
             &solution,
             &vars,
-            &basket,
-            &[0],
+            &item_group,
             &mut next_bundle_id,
         );
 
         assert!(apps.is_empty());
+
         // next_bundle_id should not have been incremented
         assert_eq!(next_bundle_id, 0);
-
-        Ok(())
     }
 
     #[test]
-    fn calculate_item_applications_continues_bundle_id_counter() -> TestResult {
+    fn calculate_item_applications_continues_bundle_id_counter() {
         let items = [Item::new(
             ProductKey::default(),
             Money::from_minor(100, iso::GBP),
         )];
 
-        let basket = Basket::with_items(items, iso::GBP)?;
+        let item_group = item_group_from_items(items);
 
         let promo = SimpleDiscount::new(
             PromotionKey::default(),
@@ -608,15 +502,12 @@ mod tests {
             PromotionKey::default(),
             &solution,
             &vars,
-            &basket,
-            &[0],
+            &item_group,
             &mut next_bundle_id,
         );
 
         assert_eq!(apps.len(), 1);
         assert_eq!(apps.first().map(|a| a.bundle_id), Some(5));
         assert_eq!(next_bundle_id, 6);
-
-        Ok(())
     }
 }

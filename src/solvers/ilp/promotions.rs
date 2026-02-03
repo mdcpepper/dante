@@ -7,7 +7,7 @@ use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 
 use crate::{
-    basket::Basket,
+    items::groups::ItemGroup,
     promotions::{Promotion, PromotionKey, applications::PromotionApplication},
     solvers::{SolverError, ilp::state::ILPState},
 };
@@ -28,14 +28,13 @@ impl<'a> PromotionInstances<'a> {
     /// Returns [`SolverError`] if any applicable promotion fails to add variables.
     pub fn from_promotions(
         promotions: &'a [Promotion<'_>],
-        basket: &'a Basket<'a>,
-        items: &[usize],
+        item_group: &ItemGroup<'_>,
         state: &mut ILPState,
     ) -> Result<Self, SolverError> {
         let mut instances = SmallVec::new();
 
         for promotion in promotions {
-            let instance = PromotionInstance::new(promotion, basket, items, state)?;
+            let instance = PromotionInstance::new(promotion, item_group, state)?;
             instances.push(instance);
         }
 
@@ -62,14 +61,9 @@ impl<'a> PromotionInstances<'a> {
     }
 
     /// Add constraints for all promotion instances
-    pub fn add_constraints<S: SolverModel>(
-        &self,
-        mut model: S,
-        basket: &'a Basket<'a>,
-        items: &[usize],
-    ) -> S {
+    pub fn add_constraints<S: SolverModel>(&self, mut model: S, item_group: &ItemGroup<'_>) -> S {
         for instance in &self.instances {
-            model = instance.add_constraints(model, basket, items);
+            model = instance.add_constraints(model, item_group);
         }
 
         model
@@ -89,7 +83,7 @@ pub struct PromotionInstance<'a> {
 impl<'a> PromotionInstance<'a> {
     /// Create a new promotion instance (promotion & its solver variables).
     ///
-    /// If the promotion cannot apply to the provided `basket`/`items`, we can avoid adding
+    /// If the promotion cannot apply to the provided item group, we can avoid adding
     /// any decision variables and instead store a no-op one. This keeps the global
     /// model smaller and prevents inapplicable promotions from contributing to the objective
     /// expression (`cost`), or any per-item usage sums used for the exclusivity constraints.
@@ -100,13 +94,12 @@ impl<'a> PromotionInstance<'a> {
     /// invalid indices, discount errors, or non-representable coefficients).
     pub fn new(
         promotion: &'a Promotion<'a>,
-        basket: &'a Basket<'a>,
-        items: &[usize],
+        item_group: &ItemGroup<'_>,
         state: &mut ILPState,
     ) -> Result<Self, SolverError> {
-        let vars = match (promotion, promotion.is_applicable(basket, items)) {
+        let vars = match (promotion, promotion.is_applicable(item_group)) {
             (Promotion::SimpleDiscount(simple_discount), true) => {
-                simple_discount.add_variables(basket, items, state)?
+                simple_discount.add_variables(item_group, state)?
             }
             (_promotion, false) => Box::new(NoopPromotionVars) as Box<dyn PromotionVars>,
         };
@@ -127,15 +120,10 @@ impl<'a> PromotionInstance<'a> {
     /// This delegates to the concrete promotion type, passing the instance's variable adapter
     /// (`self.vars`). For a no-op instance, this should behave like an identity and return the
     /// model unchanged.
-    fn add_constraints<S: SolverModel>(
-        &self,
-        model: S,
-        basket: &'a Basket<'a>,
-        items: &[usize],
-    ) -> S {
+    fn add_constraints<S: SolverModel>(&self, model: S, item_group: &ItemGroup<'_>) -> S {
         match &self.promotion {
             Promotion::SimpleDiscount(simple) => {
-                simple.add_constraints(model, self.vars.as_ref(), basket, items)
+                simple.add_constraints(model, self.vars.as_ref(), item_group)
             }
         }
     }
@@ -147,17 +135,16 @@ impl<'a> PromotionInstance<'a> {
     ///
     /// # Errors
     ///
-    /// Returns `SolverError` if a selected item index is invalid (missing from the basket),
+    /// Returns `SolverError` if a selected item index is invalid (missing from the item group),
     /// or if the discount for a selected item cannot be computed.
     pub fn calculate_item_discounts(
         &self,
         solution: &dyn Solution,
-        basket: &'a Basket<'a>,
-        items: &[usize],
+        item_group: &ItemGroup<'_>,
     ) -> Result<FxHashMap<usize, (i64, i64)>, SolverError> {
         match &self.promotion {
             Promotion::SimpleDiscount(simple) => {
-                simple.calculate_item_discounts(solution, self.vars.as_ref(), basket, items)
+                simple.calculate_item_discounts(solution, self.vars.as_ref(), item_group)
             }
         }
     }
@@ -166,20 +153,18 @@ impl<'a> PromotionInstance<'a> {
     ///
     /// Reads the solved variable values to determine which items this promotion selected and
     /// returns [`PromotionApplication`] instances with bundle IDs and price details.
-    pub fn calculate_item_applications(
+    pub fn calculate_item_applications<'group>(
         &self,
         solution: &dyn Solution,
-        basket: &'a Basket<'a>,
-        items: &[usize],
+        item_group: &'group ItemGroup<'_>,
         next_bundle_id: &mut usize,
-    ) -> SmallVec<[PromotionApplication<'a>; 10]> {
+    ) -> SmallVec<[PromotionApplication<'group>; 10]> {
         match &self.promotion {
             Promotion::SimpleDiscount(simple) => simple.calculate_item_applications(
                 self.promotion.key(),
                 solution,
                 self.vars.as_ref(),
-                basket,
-                items,
+                item_group,
                 next_bundle_id,
             ),
         }
@@ -217,18 +202,18 @@ pub trait PromotionVars: fmt::Debug + Send + Sync {
 /// 2. [`ILPPromotion::add_variables`] creates the decision variables and contributes
 ///    to the objective (`cost`).
 /// 3. [`ILPPromotion::add_constraints`] optionally adds constraints that link those
-///    variables to each other and/or to the basket.
+///    variables to each other and/or to the item group.
 /// 4. After solving, [`ILPPromotion::calculate_item_discounts`] extracts the final
 ///    per-item discount amounts from the solution.
 ///
 /// Notes:
-/// - Implementations should be deterministic for a given `basket`/`items` input; ILP
+/// - Implementations should be deterministic for a given item group input; ILP
 ///   solutions are already sensitive to tiny numeric differences.
 /// - Promotions that are not applicable are modeled as a no-op by [`PromotionInstance::new`].
 ///   Implementations should therefore treat an "empty" `vars` as "selects nothing" and avoid
 ///   introducing constraints that would accidentally affect the global model.
-pub trait ILPPromotion<'a>: Send + Sync {
-    /// Return whether this promotion _might_ apply to the given basket and candidate items.
+pub trait ILPPromotion: Send + Sync {
+    /// Return whether this promotion _might_ apply to the given item group.
     ///
     /// This is used as a fast pre-check to avoid allocating variables/constraints for
     /// promotions that cannot possibly contribute to the solution.
@@ -239,7 +224,7 @@ pub trait ILPPromotion<'a>: Send + Sync {
     ///
     /// Avoid expensive computations that can be deferred until
     /// [`ILPPromotion::add_variables`] / [`ILPPromotion::calculate_item_discounts`].
-    fn is_applicable(&self, basket: &'a Basket<'a>, items: &[usize]) -> bool;
+    fn is_applicable(&self, item_group: &ItemGroup<'_>) -> bool;
 
     /// Create per-item binary variables and add them to the objective expression.
     ///
@@ -247,7 +232,7 @@ pub trait ILPPromotion<'a>: Send + Sync {
     /// The discounted price contribution should be added to `cost` so the solver can trade off
     /// selecting discounts against other promotions under global constraints.
     ///
-    /// Missing items should be surfaced to callers via [`SolverError::Basket`].
+    /// Missing items should be surfaced to callers via [`SolverError::ItemGroup`].
     /// Discount calculation errors should be surfaced to callers via [`SolverError::Discount`].
     /// If a discounted minor unit amount cannot be represented exactly as a solver coefficient,
     /// return [`SolverError::MinorUnitsNotRepresentable`].
@@ -258,8 +243,7 @@ pub trait ILPPromotion<'a>: Send + Sync {
     /// or non-representable coefficients).
     fn add_variables(
         &self,
-        basket: &'a Basket<'a>,
-        items: &[usize],
+        item_group: &ItemGroup<'_>,
         state: &mut ILPState,
     ) -> Result<Box<dyn PromotionVars>, SolverError>;
 
@@ -277,14 +261,13 @@ pub trait ILPPromotion<'a>: Send + Sync {
         &self,
         model: S,
         vars: &dyn PromotionVars,
-        basket: &'a Basket<'a>,
-        items: &[usize],
+        item_group: &ItemGroup<'_>,
     ) -> S;
 
     /// Calculate per-item discounts chosen for this promotion.
     ///
     /// This is the "interpretation" step: it inspects the solved decision variables
-    /// and returns a mapping from basket item index to `(original_minor, discounted_minor)`.
+    /// and returns a mapping from item group index to `(original_minor, discounted_minor)`.
     ///
     /// Requirements:
     /// - Only include items that are selected in `solution` according to `vars`.
@@ -295,14 +278,13 @@ pub trait ILPPromotion<'a>: Send + Sync {
     ///
     /// # Errors
     ///
-    /// Returns [`SolverError`] if a selected item index is invalid (missing from the basket),
+    /// Returns [`SolverError`] if a selected item index is invalid (missing from the item group),
     /// or if the discount for a selected item cannot be computed.
     fn calculate_item_discounts(
         &self,
         solution: &dyn Solution,
         vars: &dyn PromotionVars,
-        basket: &'a Basket<'a>,
-        items: &[usize],
+        item_group: &ItemGroup<'_>,
     ) -> Result<FxHashMap<usize, (i64, i64)>, SolverError>;
 
     /// Calculate promotion applications for selected items.
@@ -316,15 +298,14 @@ pub trait ILPPromotion<'a>: Send + Sync {
     ///
     /// The `next_bundle_id` counter is passed mutably and should be incremented
     /// for each new bundle created. This ensures unique IDs across all promotions.
-    fn calculate_item_applications(
+    fn calculate_item_applications<'group>(
         &self,
         promotion_key: PromotionKey,
         solution: &dyn Solution,
         vars: &dyn PromotionVars,
-        basket: &'a Basket<'a>,
-        items: &[usize],
+        item_group: &'group ItemGroup<'_>,
         next_bundle_id: &mut usize,
-    ) -> SmallVec<[PromotionApplication<'a>; 10]>;
+    ) -> SmallVec<[PromotionApplication<'group>; 10]>;
 }
 
 /// No-op promotion variables implementation
@@ -348,9 +329,8 @@ mod tests {
     use testresult::TestResult;
 
     use crate::{
-        basket::Basket,
         discounts::Discount,
-        items::Item,
+        items::{Item, groups::ItemGroup},
         products::ProductKey,
         promotions::{Promotion, PromotionKey, simple_discount::SimpleDiscount},
         tags::{collection::TagCollection, string::StringTagCollection},
@@ -371,13 +351,21 @@ mod tests {
         }
     }
 
+    fn item_group_from_items<const N: usize>(items: [Item<'_>; N]) -> ItemGroup<'_> {
+        let currency = items
+            .first()
+            .map_or(iso::GBP, |item| item.price().currency());
+
+        ItemGroup::new(items.into_iter().collect(), currency)
+    }
+
     #[test]
     fn promotion_instance_calculates_item_discounts_via_inner_promotion() -> TestResult {
         let items = [Item::new(
             ProductKey::default(),
             Money::from_minor(100, iso::GBP),
         )];
-        let basket = Basket::with_items(items, iso::GBP)?;
+        let item_group = item_group_from_items(items);
 
         let promotion = Promotion::SimpleDiscount(SimpleDiscount::new(
             PromotionKey::default(),
@@ -388,9 +376,9 @@ mod tests {
         let pb = ProblemVariables::new();
         let cost = Expression::default();
         let mut state = ILPState::new(pb, cost);
-        let instance = PromotionInstance::new(&promotion, &basket, &[0], &mut state)?;
+        let instance = PromotionInstance::new(&promotion, &item_group, &mut state)?;
 
-        let discounts = instance.calculate_item_discounts(&SelectAllSolution, &basket, &[0])?;
+        let discounts = instance.calculate_item_discounts(&SelectAllSolution, &item_group)?;
 
         assert_eq!(discounts.get(&0), Some(&(100, 50)));
 

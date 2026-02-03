@@ -3,7 +3,7 @@
 use decimal_percentage::Percentage;
 use num_traits::FromPrimitive;
 use rust_decimal::Decimal;
-use rusty_money::{Money, MoneyError, iso};
+use rusty_money::{Money, MoneyError, iso::Currency};
 
 use crate::promotions::PromotionKey;
 
@@ -13,17 +13,17 @@ pub struct PromotionApplication<'a> {
     /// Key of the promotion that was applied
     pub promotion_key: PromotionKey,
 
-    /// Index of the item in the basket
+    /// Index of the item in the item group
     pub item_idx: usize,
 
     /// ID assigned to a bundle of items in the same promotion
     pub bundle_id: usize,
 
     /// Original price of the item
-    pub original_price: Money<'a, iso::Currency>,
+    pub original_price: Money<'a, Currency>,
 
     /// Final price after discount
-    pub final_price: Money<'a, iso::Currency>,
+    pub final_price: Money<'a, Currency>,
 }
 
 impl<'a> PromotionApplication<'_> {
@@ -32,7 +32,7 @@ impl<'a> PromotionApplication<'_> {
     /// # Errors
     ///
     /// Returns an error if the original price or final price cannot be subtracted.
-    pub fn savings(&'a self) -> Result<Money<'a, iso::Currency>, MoneyError> {
+    pub fn savings(&'a self) -> Result<Money<'a, Currency>, MoneyError> {
         self.original_price.sub(self.final_price)
     }
 
@@ -64,6 +64,7 @@ impl<'a> PromotionApplication<'_> {
 mod tests {
     use super::*;
     use rust_decimal::Decimal;
+    use rusty_money::iso::{GBP, USD};
 
     #[test]
     fn savings_returns_difference_between_original_and_final() {
@@ -71,11 +72,11 @@ mod tests {
             promotion_key: PromotionKey::default(),
             item_idx: 0,
             bundle_id: 0,
-            original_price: Money::from_minor(200, iso::USD),
-            final_price: Money::from_minor(150, iso::USD),
+            original_price: Money::from_minor(200, GBP),
+            final_price: Money::from_minor(150, GBP),
         };
 
-        assert_eq!(app.savings(), Ok(Money::from_minor(50, iso::USD)));
+        assert_eq!(app.savings(), Ok(Money::from_minor(50, GBP)));
     }
 
     #[test]
@@ -84,15 +85,15 @@ mod tests {
             promotion_key: PromotionKey::default(),
             item_idx: 0,
             bundle_id: 0,
-            original_price: Money::from_minor(200, iso::USD),
-            final_price: Money::from_minor(150, iso::GBP),
+            original_price: Money::from_minor(200, USD),
+            final_price: Money::from_minor(150, GBP),
         };
 
         assert_eq!(
             app.savings(),
             Err(MoneyError::CurrencyMismatch {
-                expected: iso::USD.iso_alpha_code,
-                actual: iso::GBP.iso_alpha_code,
+                expected: USD.iso_alpha_code,
+                actual: GBP.iso_alpha_code,
             })
         );
     }
@@ -103,8 +104,8 @@ mod tests {
             promotion_key: PromotionKey::default(),
             item_idx: 0,
             bundle_id: 0,
-            original_price: Money::from_minor(0, iso::USD),
-            final_price: Money::from_minor(0, iso::USD),
+            original_price: Money::from_minor(0, GBP),
+            final_price: Money::from_minor(0, GBP),
         };
 
         assert_eq!(app.savings_percent(), Ok(Percentage::from(0.0)));
@@ -116,8 +117,8 @@ mod tests {
             promotion_key: PromotionKey::default(),
             item_idx: 0,
             bundle_id: 0,
-            original_price: Money::from_minor(200, iso::USD),
-            final_price: Money::from_minor(150, iso::USD),
+            original_price: Money::from_minor(200, GBP),
+            final_price: Money::from_minor(150, GBP),
         };
 
         let percent = app.savings_percent()?;

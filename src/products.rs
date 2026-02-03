@@ -1,6 +1,6 @@
 //! Products
 
-use rusty_money::{Money, iso};
+use rusty_money::{Money, iso::Currency};
 use slotmap::new_key_type;
 
 use crate::tags::{collection::TagCollection, string::StringTagCollection};
@@ -20,5 +20,5 @@ pub struct Product<'a, T: TagCollection = StringTagCollection> {
     pub tags: T,
 
     /// Product price
-    pub price: Money<'a, iso::Currency>,
+    pub price: Money<'a, Currency>,
 }

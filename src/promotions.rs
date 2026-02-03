@@ -3,7 +3,7 @@
 use slotmap::new_key_type;
 
 use crate::{
-    basket::Basket, promotions::simple_discount::SimpleDiscount,
+    items::groups::ItemGroup, promotions::simple_discount::SimpleDiscount,
     solvers::ilp::promotions::ILPPromotion,
 };
 
@@ -29,7 +29,7 @@ pub enum Promotion<'a> {
     SimpleDiscount(SimpleDiscount<'a>),
 }
 
-impl<'a> Promotion<'a> {
+impl Promotion<'_> {
     /// Return the promotion key.
     pub fn key(&self) -> PromotionKey {
         match self {
@@ -37,12 +37,10 @@ impl<'a> Promotion<'a> {
         }
     }
 
-    /// Return whether this promotion *might* apply to the given basket and candidate items.
-    pub fn is_applicable(&self, basket: &'a Basket<'a>, items: &[usize]) -> bool {
+    /// Return whether this promotion *might* apply to the given item group.
+    pub fn is_applicable(&self, item_group: &ItemGroup<'_>) -> bool {
         match self {
-            Promotion::SimpleDiscount(simple_disount) => {
-                simple_disount.is_applicable(basket, items)
-            }
+            Promotion::SimpleDiscount(simple_disount) => simple_disount.is_applicable(item_group),
         }
     }
 }
@@ -51,19 +49,19 @@ impl<'a> Promotion<'a> {
 mod tests {
     use rusty_money::{Money, iso};
     use slotmap::SlotMap;
-    use testresult::TestResult;
+    use smallvec::SmallVec;
 
     use crate::{
-        basket::Basket,
         discounts::Discount,
+        items::groups::ItemGroup,
         tags::{collection::TagCollection, string::StringTagCollection},
     };
 
     use super::{Promotion, PromotionKey, simple_discount::SimpleDiscount};
 
     #[test]
-    fn key_delegates_to_inner_promotion_key() -> TestResult {
-        let basket = Basket::with_items([], iso::GBP)?;
+    fn key_delegates_to_inner_promotion_key() {
+        let item_group: ItemGroup<'_> = ItemGroup::new(SmallVec::new(), iso::GBP);
 
         // Generate a non-default promotion key so returning `Default::default()` is detectable.
         let mut keys = SlotMap::<PromotionKey, ()>::with_key();
@@ -81,16 +79,14 @@ mod tests {
         assert_ne!(promo.key(), PromotionKey::default());
 
         // Also smoke that this promo is "well-formed" for other calls.
-        let _ = promo.is_applicable(&basket, &[]);
-
-        Ok(())
+        let _ = promo.is_applicable(&item_group);
     }
 
     #[test]
-    fn is_applicable_delegates_to_inner_promotion() -> TestResult {
+    fn is_applicable_delegates_to_inner_promotion() {
         // An empty item set should not be considered applicable; this ensures
         // `Promotion::is_applicable` doesn't accidentally short-circuit to `true`.
-        let basket = Basket::with_items([], iso::GBP)?;
+        let item_group: ItemGroup<'_> = ItemGroup::new(SmallVec::new(), iso::GBP);
 
         let inner = SimpleDiscount::new(
             PromotionKey::default(),
@@ -100,8 +96,6 @@ mod tests {
 
         let promo = Promotion::SimpleDiscount(inner);
 
-        assert!(!promo.is_applicable(&basket, &[]));
-
-        Ok(())
+        assert!(!promo.is_applicable(&item_group));
     }
 }

@@ -1,13 +1,13 @@
 //! Solvers for Promotions
 
 use good_lp::ResolutionError;
-use rusty_money::{Money, MoneyError, iso};
+use rusty_money::{Money, MoneyError, iso::Currency};
 use smallvec::SmallVec;
 use thiserror::Error;
 
 use crate::{
-    basket::{Basket, BasketError},
     discounts::DiscountError,
+    items::groups::{ItemGroup, ItemGroupError},
     promotions::{Promotion, applications::PromotionApplication},
 };
 
@@ -25,9 +25,9 @@ pub enum SolverError {
         minor_units: i64,
     },
 
-    /// Wrapped basket error
+    /// Wrapped item group error
     #[error(transparent)]
-    Basket(#[from] BasketError),
+    ItemGroup(#[from] ItemGroupError),
 
     /// Wrapped money arithmetic or currency mismatch error.
     #[error(transparent)]
@@ -49,17 +49,17 @@ pub enum SolverError {
     },
 }
 
-/// Result of the promotion solution for the given items
+/// Result of the promotion solution for the given item group
 #[derive(Debug, Clone)]
 pub struct SolverResult<'a> {
-    /// Indexes of items passed that were affected by promotions
+    /// Indexes of item group entries that were affected by promotions
     pub affected_items: SmallVec<[usize; 10]>,
 
-    /// Indexes of items passed that were not affected by promotions
+    /// Indexes of item group entries that were not affected by promotions
     pub unaffected_items: SmallVec<[usize; 10]>,
 
     /// Total cost of the items after applying promotions
-    pub total: Money<'a, iso::Currency>,
+    pub total: Money<'a, Currency>,
 
     /// Details of each promotion application (item, bundle, original/final price)
     pub promotion_applications: SmallVec<[PromotionApplication<'a>; 10]>,
@@ -67,14 +67,13 @@ pub struct SolverResult<'a> {
 
 /// Trait for solving promotion problems on a set of items
 pub trait Solver {
-    /// Solve the promotions for the given items
+    /// Solve the promotions for the given item group
     ///
     /// # Errors
     ///
     /// Returns a [`SolverError`] if the solver encounters an error.
-    fn solve<'a>(
-        promotions: &'a [Promotion<'_>],
-        basket: &'a Basket<'a>,
-        items: &[usize],
-    ) -> Result<SolverResult<'a>, SolverError>;
+    fn solve<'group>(
+        promotions: &[Promotion<'_>],
+        item_group: &'group ItemGroup<'_>,
+    ) -> Result<SolverResult<'group>, SolverError>;
 }

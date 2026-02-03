@@ -2,7 +2,7 @@
 
 use good_lp::{Expression, ProblemVariables, Solution, SolverModel, Variable, variable};
 use num_traits::ToPrimitive;
-use rusty_money::{Money, iso};
+use rusty_money::{Money, iso::Currency};
 use smallvec::{SmallVec, smallvec};
 
 #[cfg(feature = "solver-highs")]
@@ -11,7 +11,7 @@ use good_lp::solvers::highs::highs as default_solver;
 use good_lp::solvers::microlp::microlp as default_solver;
 
 use crate::{
-    basket::Basket,
+    items::groups::ItemGroup,
     promotions::{Promotion, applications::PromotionApplication},
     solvers::{
         Solver, SolverError, SolverResult,
@@ -27,32 +27,31 @@ pub const BINARY_THRESHOLD: f64 = 0.5;
 
 type ItemIndexList = SmallVec<[usize; 10]>;
 type ItemUsageFlags = SmallVec<[bool; 10]>;
-type AppliedPromotionState<'a> = (ItemIndexList, ItemUsageFlags, Money<'a, iso::Currency>);
-type FullPriceState<'a> = (ItemIndexList, Money<'a, iso::Currency>);
+type AppliedPromotionState<'a> = (ItemIndexList, ItemUsageFlags, Money<'a, Currency>);
+type FullPriceState<'a> = (ItemIndexList, Money<'a, Currency>);
 
 /// Solver using Integer Linear Programming (ILP)
 #[derive(Debug)]
 pub struct ILPSolver;
 
 impl Solver for ILPSolver {
-    fn solve<'a>(
-        promotions: &'a [Promotion<'_>],
-        basket: &'a Basket<'a>,
-        items: &[usize],
-    ) -> Result<SolverResult<'a>, SolverError> {
-        // Return early if no items are selected
-        if items.is_empty() {
+    fn solve<'group>(
+        promotions: &[Promotion<'_>],
+        item_group: &'group ItemGroup<'_>,
+    ) -> Result<SolverResult<'group>, SolverError> {
+        // Return early if the item group is empty
+        if item_group.is_empty() {
             return Ok(SolverResult {
                 affected_items: SmallVec::with_capacity(0),
                 unaffected_items: SmallVec::with_capacity(0),
-                total: Money::from_minor(0, basket.currency()),
+                total: Money::from_minor(0, item_group.currency()),
                 promotion_applications: SmallVec::with_capacity(0),
             });
         }
 
         // Build the optimization problem using ILPState to manage variables and objective.
         // The goal is to find the best combination of promotions that minimizes
-        // total basket cost.
+        // total item group cost.
         //
         // We set up three things:
         //
@@ -63,10 +62,10 @@ impl Solver for ILPSolver {
         // Set up all possible promotion choices for the solver to consider.
         // For each promotion, we create decision variables that let the solver choose
         // whether to apply that promotion to each eligible item.
-        let mut state = ILPState::with_presence_variables(basket, items)?;
+        let mut state = ILPState::with_presence_variables(item_group)?;
 
         let promotion_instances =
-            PromotionInstances::from_promotions(promotions, basket, items, &mut state)?;
+            PromotionInstances::from_promotions(promotions, item_group, &mut state)?;
 
         // Extract state for model creation
         let (pb, cost, item_presence) = state.into_parts();
@@ -74,7 +73,7 @@ impl Solver for ILPSolver {
         // Create the solver model
         let mut model = pb.minimise(cost).using(default_solver);
 
-        ensure_presence_vars_len(item_presence.len(), items.len())?;
+        ensure_presence_vars_len(item_presence.len(), item_group.len())?;
 
         // Ensure each item is purchased exactly once (either full price OR via one promotion).
         //
@@ -84,39 +83,34 @@ impl Solver for ILPSolver {
         //
         // Example: If "20% off" and "Buy-one-get-one" both target the same item,
         // the solver must choose one or neither, never both.
-        for (i, &item_idx) in items.iter().enumerate() {
-            let z_i = item_presence
-                .get(i)
-                .ok_or(SolverError::InvariantViolation {
-                    message: "presence variable missing for item index",
-                })?;
-
+        for (item_idx, z_i) in item_presence.iter().copied().enumerate() {
             let constraint_expr =
-                promotion_instances.add_item_presence_term(Expression::from(*z_i), item_idx);
+                promotion_instances.add_item_presence_term(Expression::from(z_i), item_idx);
 
             model = model.with(constraint_expr.eq(1));
         }
 
         // Add constraints for all promotions
-        model = promotion_instances.add_constraints(model, basket, items);
+        model = promotion_instances.add_constraints(model, item_group);
 
         let solution = model.solve()?;
 
         // Translate the solver's decisions back into business terms: which items got
         // discounted, by which promotions, and what their final prices are.
-        let mut used_items: ItemUsageFlags = smallvec![false; items.len()];
-        let mut total = Money::from_minor(0, basket.currency());
-        let mut promotion_applications: SmallVec<[PromotionApplication<'a>; 10]> = SmallVec::new();
+        let mut used_items: ItemUsageFlags = smallvec![false; item_group.len()];
+        let mut total = Money::from_minor(0, item_group.currency());
+        let mut promotion_applications: SmallVec<[PromotionApplication<'group>; 10]> =
+            SmallVec::new();
         let mut next_bundle_id: usize = 0;
         let mut affected_items: ItemIndexList = ItemIndexList::new();
 
         // Extract which items each promotion selected and their discounted prices
         for instance in promotion_instances.iter() {
             let apps =
-                instance.calculate_item_applications(&solution, basket, items, &mut next_bundle_id);
+                instance.calculate_item_applications(&solution, item_group, &mut next_bundle_id);
 
             let (applied_items, updated_used_items, updated_total) =
-                apply_promotion_applications(items, used_items, total, &apps)?;
+                apply_promotion_applications(item_group.len(), used_items, total, &apps)?;
 
             affected_items.extend(applied_items);
             used_items = updated_used_items;
@@ -126,7 +120,7 @@ impl Solver for ILPSolver {
         }
 
         let (unaffected_items, total) =
-            collect_full_price_items(basket, &solution, &item_presence, items, used_items, total)?;
+            collect_full_price_items(item_group, &solution, &item_presence, used_items, total)?;
 
         Ok(SolverResult {
             affected_items,
@@ -152,16 +146,14 @@ fn ensure_presence_vars_len(z_len: usize, items_len: usize) -> Result<(), Solver
 ///
 /// # Errors
 ///
-/// Returns a [`SolverError`] if any items contains a Money amount in minor units
-/// that cannot be represented exactly as a solver coefficient.
-fn build_presence_variables_and_objective<'a>(
-    basket: &'a Basket<'a>,
-    items: &[usize],
+/// Returns a [`SolverError`] if adding a full-price item to the total fails.
+fn build_presence_variables_and_objective(
+    item_group: &ItemGroup<'_>,
     pb: &mut ProblemVariables,
 ) -> Result<(SmallVec<[Variable; 10]>, Expression), SolverError> {
     // Each item must be present in the solution whether a promotion is applied or not.
     // Create a presence variable for each item representing the full-price option.
-    let presence: SmallVec<[Variable; 10]> = (0..items.len())
+    let presence: SmallVec<[Variable; 10]> = (0..item_group.len())
         .map(|_| pb.add(variable().binary()))
         .collect();
 
@@ -175,9 +167,9 @@ fn build_presence_variables_and_objective<'a>(
     presence
         .iter()
         .copied()
-        .zip(items.iter().copied())
-        .try_for_each(|(var, item_idx)| -> Result<(), SolverError> {
-            let minor_units = basket.get_item(item_idx)?.price().to_minor_units();
+        .zip(item_group.iter())
+        .try_for_each(|(var, item)| -> Result<(), SolverError> {
+            let minor_units = item.price().to_minor_units();
 
             // `good_lp` stores coefficients as `f64`. Only integers with absolute value <= 2^53
             // can be represented exactly in an IEEE-754 `f64` mantissa; enforce that via a
@@ -196,81 +188,79 @@ fn build_presence_variables_and_objective<'a>(
 ///
 /// # Errors
 ///
-/// Returns a [`SolverError`] if any items contains a Money amount in minor units
+/// Returns a [`SolverError`] if any item in the group contains a Money amount in minor units
 /// that cannot be represented exactly as a solver coefficient.
-fn collect_full_price_items<'a>(
-    basket: &'a Basket<'a>,
+fn collect_full_price_items<'group>(
+    item_group: &'group ItemGroup<'_>,
     solution: &impl Solution,
     z: &[Variable],
-    items: &[usize],
     mut used_items: ItemUsageFlags,
-    mut total: Money<'a, iso::Currency>,
-) -> Result<FullPriceState<'a>, SolverError> {
+    mut total: Money<'group, Currency>,
+) -> Result<FullPriceState<'group>, SolverError> {
     let mut unaffected_items = SmallVec::new();
 
     // Any item that wasn't claimed by a promotion is treated as an unaffected
     // full-price item and contributes its full price to the total.
-    z.iter()
-        .copied()
-        .zip(items.iter().copied())
-        .zip(used_items.iter_mut())
-        .try_for_each(|((var, item_idx), used)| -> Result<(), SolverError> {
-            // `var` is a binary decision variable; the solver return floats, so treat values
-            // greater than 0.5 as "selected" (i.e. 1) to tolerate tiny numerical noise.
-            if solution.value(var) > BINARY_THRESHOLD && !*used {
-                // Add the item to the list of unaffected items.
-                unaffected_items.push(item_idx);
+    for (item_idx, (var, item)) in z.iter().copied().zip(item_group.iter()).enumerate() {
+        let Some(used) = used_items.get_mut(item_idx) else {
+            continue;
+        };
 
-                // Add the item's full price to the result total.
-                total = total.add(*basket.get_item(item_idx)?.price())?;
+        // `var` is a binary decision variable; the solver return floats, so treat values
+        // greater than 0.5 as "selected" (i.e. 1) to tolerate tiny numerical noise.
+        if solution.value(var) > BINARY_THRESHOLD && !*used {
+            // Add the item to the list of unaffected items.
+            unaffected_items.push(item_idx);
 
-                // Mark the item as used.
-                *used = true;
-            }
+            // Add the item's full price to the result total.
+            total = total.add(Money::from_minor(
+                item.price().to_minor_units(),
+                item_group.currency(),
+            ))?;
 
-            Ok(())
-        })?;
+            // Mark the item as used.
+            *used = true;
+        }
+    }
 
     Ok((unaffected_items, total))
 }
 
 /// Apply promotion applications to track affected items and accumulate total.
 ///
-/// This function processes [`PromotionApplication`] instances, ensuring each position
-/// in `items` is used at most once (via `used_items`), records affected item indices,
+/// This function processes [`PromotionApplication`] instances, ensuring each item
+/// group position is used at most once (via `used_items`), records affected item indices,
 /// and adds the final prices to `total`.
 ///
-/// Note: `used_items` is indexed by the *position* in `items` (not the item index
-/// itself). This keeps it aligned with other per-variable/per-position arrays used
-/// by the ILP formulation.
+/// Note: `used_items` is indexed by item group position (item index). This keeps it
+/// aligned with other per-variable/per-position arrays used by the ILP formulation.
 ///
 /// # Errors
 ///
 /// Returns a [`SolverError`] if adding a final price to `total` fails.
 fn apply_promotion_applications<'a>(
-    items: &[usize],
+    item_count: usize,
     mut used_items: ItemUsageFlags,
-    mut total: Money<'a, iso::Currency>,
+    mut total: Money<'a, Currency>,
     applications: &[PromotionApplication<'a>],
 ) -> Result<AppliedPromotionState<'a>, SolverError> {
     // The indexes of items that are being affected by promotions
     let mut affected_items: ItemIndexList = ItemIndexList::new();
 
     for app in applications {
-        // Find the position of this item in the items slice
-        let Some(pos) = items.iter().position(|&idx| idx == app.item_idx) else {
+        if app.item_idx >= item_count {
             continue;
-        };
+        }
 
         // If this position is already claimed, skip it to avoid double-counting.
-        if let Some(used) = used_items.get(pos)
+        if let Some(used) = used_items.get(app.item_idx)
             && *used
         {
             continue;
         }
 
         // Commit to consuming this item position as soon as we apply its discount.
-        if let Some(used) = used_items.get_mut(pos) {
+        if let Some(used) = used_items.get_mut(app.item_idx) {
             *used = true;
         }
 
@@ -297,11 +287,12 @@ mod tests {
 
     use decimal_percentage::Percentage;
     use rusty_money::iso;
+    use smallvec::SmallVec;
     use testresult::TestResult;
 
     use crate::{
         discounts::Discount,
-        items::Item,
+        items::{Item, groups::ItemGroup},
         products::ProductKey,
         promotions::{
             Promotion, PromotionKey, applications::PromotionApplication,
@@ -340,6 +331,14 @@ mod tests {
         ]
     }
 
+    fn item_group_from_items<const N: usize>(items: [Item<'_>; N]) -> ItemGroup<'_> {
+        let currency = items
+            .first()
+            .map_or(iso::GBP, |item| item.price().currency());
+
+        ItemGroup::new(items.into_iter().collect(), currency)
+    }
+
     #[test]
     fn solver_returns_all_items_full_price_with_no_promotions() -> TestResult {
         let items = test_items();
@@ -349,9 +348,9 @@ mod tests {
             .map(|item| item.price().to_minor_units())
             .sum::<i64>();
 
-        let basket = Basket::with_items(items, iso::GBP)?;
+        let item_group = item_group_from_items(items);
 
-        let result = ILPSolver::solve(&[], &basket, &[0, 1, 2])?;
+        let result = ILPSolver::solve(&[], &item_group)?;
 
         assert_eq!(subtotal, result.total.to_minor_units());
         assert_eq!(0, result.affected_items.len());
@@ -363,8 +362,8 @@ mod tests {
 
     #[test]
     fn apply_applications_skips_pre_used_positions() -> TestResult {
-        // `apply_applications` uses `used_items` (indexed by position in the `items` slice)
-        // to prevent an item position from being claimed by more than one promotion.
+        // `apply_applications` uses `used_items` (indexed by item group position)
+        // to prevent an item from being claimed by more than one promotion.
         let mut used_items: ItemUsageFlags = smallvec![false; 3];
 
         // Simulate a different promotion already consuming the middle position.
@@ -385,7 +384,7 @@ mod tests {
         }];
 
         let (affected_items, _used_items, total) =
-            apply_promotion_applications(&[0, 1, 2], used_items, total, &applications)?;
+            apply_promotion_applications(3, used_items, total, &applications)?;
 
         // Because the only discounted item was already marked "used", nothing should be applied.
         assert!(affected_items.is_empty());
@@ -408,7 +407,7 @@ mod tests {
         }];
 
         let (affected_items, _used_items, total) =
-            apply_promotion_applications(&[0, 1], used_items, total, &applications)?;
+            apply_promotion_applications(2, used_items, total, &applications)?;
 
         assert!(affected_items.is_empty());
         assert_eq!(total.to_minor_units(), 0);
@@ -419,7 +418,7 @@ mod tests {
     #[test]
     fn solver_applies_percentage_discount_to_tagged_items() -> TestResult {
         let items = test_items_with_tags();
-        let basket = Basket::with_items(items, iso::GBP)?;
+        let item_group = item_group_from_items(items);
 
         let promotions = [Promotion::SimpleDiscount(SimpleDiscount::new(
             PromotionKey::default(),
@@ -427,7 +426,7 @@ mod tests {
             Discount::PercentageOffBundleTotal(Percentage::from(0.25)),
         ))];
 
-        let result = ILPSolver::solve(&promotions, &basket, &[0, 1, 2])?;
+        let result = ILPSolver::solve(&promotions, &item_group)?;
 
         assert_eq!(result.total.to_minor_units(), 500);
 
@@ -445,7 +444,7 @@ mod tests {
     #[test]
     fn solver_applies_price_override_to_all_items_with_empty_tag_promotion() -> TestResult {
         let items = test_items();
-        let basket = Basket::with_items(items, iso::GBP)?;
+        let item_group = item_group_from_items(items);
 
         let promotions = [Promotion::SimpleDiscount(SimpleDiscount::new(
             PromotionKey::default(),
@@ -453,7 +452,7 @@ mod tests {
             Discount::SetBundleTotalPrice(Money::from_minor(50, iso::GBP)),
         ))];
 
-        let result = ILPSolver::solve(&promotions, &basket, &[0, 1, 2])?;
+        let result = ILPSolver::solve(&promotions, &item_group)?;
 
         assert_eq!(result.total.to_minor_units(), 150);
 
@@ -469,7 +468,7 @@ mod tests {
     #[test]
     fn solver_ignores_discount_when_no_items_match() -> TestResult {
         let items = test_items();
-        let basket = Basket::with_items(items, iso::GBP)?;
+        let item_group = item_group_from_items(items);
 
         let promotions = [Promotion::SimpleDiscount(SimpleDiscount::new(
             PromotionKey::default(),
@@ -477,7 +476,7 @@ mod tests {
             Discount::PercentageOffBundleTotal(Percentage::from(0.25)),
         ))];
 
-        let result = ILPSolver::solve(&promotions, &basket, &[0, 1, 2])?;
+        let result = ILPSolver::solve(&promotions, &item_group)?;
 
         assert_eq!(result.total.to_minor_units(), 600);
         assert!(result.affected_items.is_empty());
@@ -492,7 +491,7 @@ mod tests {
     #[test]
     fn solver_prefers_full_price_when_discount_is_worse() -> TestResult {
         let items = test_items();
-        let basket = Basket::with_items(items, iso::GBP)?;
+        let item_group = item_group_from_items(items);
 
         let promotions = [Promotion::SimpleDiscount(SimpleDiscount::new(
             PromotionKey::default(),
@@ -500,7 +499,7 @@ mod tests {
             Discount::SetBundleTotalPrice(Money::from_minor(400, iso::GBP)),
         ))];
 
-        let result = ILPSolver::solve(&promotions, &basket, &[0, 1, 2])?;
+        let result = ILPSolver::solve(&promotions, &item_group)?;
 
         assert_eq!(result.total.to_minor_units(), 600);
         assert!(result.affected_items.is_empty());
@@ -515,7 +514,7 @@ mod tests {
     #[test]
     fn solver_populates_promotion_applications_with_correct_details() -> TestResult {
         let items = test_items_with_tags();
-        let basket = Basket::with_items(items, iso::GBP)?;
+        let item_group = item_group_from_items(items);
 
         let promotions = [Promotion::SimpleDiscount(SimpleDiscount::new(
             PromotionKey::default(),
@@ -523,7 +522,7 @@ mod tests {
             Discount::SetBundleTotalPrice(Money::from_minor(50, iso::GBP)),
         ))];
 
-        let result = ILPSolver::solve(&promotions, &basket, &[0, 1, 2])?;
+        let result = ILPSolver::solve(&promotions, &item_group)?;
 
         // Items 0 and 2 have tag "a", so should be discounted
         assert_eq!(result.promotion_applications.len(), 2);
@@ -556,9 +555,9 @@ mod tests {
 
     #[test]
     fn solver_with_no_items_returns_empty_result() -> TestResult {
-        let basket = Basket::with_items([], iso::GBP)?;
+        let item_group: ItemGroup<'_> = ItemGroup::new(SmallVec::new(), iso::GBP);
 
-        let result = ILPSolver::solve(&[], &basket, &[])?;
+        let result = ILPSolver::solve(&[], &item_group)?;
 
         assert_eq!(result.total.to_minor_units(), 0);
         assert!(result.affected_items.is_empty());
@@ -604,10 +603,10 @@ mod tests {
     #[test]
     fn base_objective_matches_sum_of_item_minor_units() -> TestResult {
         let items = test_items();
-        let basket = Basket::with_items(items, iso::GBP)?;
+        let item_group = item_group_from_items(items);
 
         let mut pb = ProblemVariables::new();
-        let (z, objective) = build_presence_variables_and_objective(&basket, &[0, 1, 2], &mut pb)?;
+        let (z, objective) = build_presence_variables_and_objective(&item_group, &mut pb)?;
 
         let solution: HashMap<Variable, f64> = z.iter().copied().map(|v| (v, 1.0)).collect();
 
@@ -622,23 +621,46 @@ mod tests {
     #[test]
     fn unaffected_items_collection_skips_pre_used_items() -> TestResult {
         let items = test_items();
-        let basket = Basket::with_items(items, iso::GBP)?;
+        let item_group = item_group_from_items(items);
 
         let mut pb = ProblemVariables::new();
-        let (z, _objective) = build_presence_variables_and_objective(&basket, &[0, 1, 2], &mut pb)?;
+        let (z, _objective) = build_presence_variables_and_objective(&item_group, &mut pb)?;
 
         let solution: HashMap<Variable, f64> = z.iter().copied().map(|v| (v, 1.0)).collect();
 
         let mut used_items: ItemUsageFlags = smallvec![false; 3];
         used_items[1] = true; // pretend item 1 was claimed by a promotion
 
-        let total = Money::from_minor(0, basket.currency());
+        let total = Money::from_minor(0, item_group.currency());
 
         let (unaffected_items, total) =
-            collect_full_price_items(&basket, &solution, &z, &[0, 1, 2], used_items, total)?;
+            collect_full_price_items(&item_group, &solution, &z, used_items, total)?;
 
         assert_eq!(unaffected_items.as_slice(), &[0, 2]);
         assert_eq!(total.to_minor_units(), 400);
+
+        Ok(())
+    }
+
+    #[test]
+    fn unaffected_items_collection_skips_missing_usage_entries() -> TestResult {
+        let items = test_items();
+        let item_group = item_group_from_items(items);
+
+        let mut pb = ProblemVariables::new();
+        let (z, _objective) = build_presence_variables_and_objective(&item_group, &mut pb)?;
+
+        let solution: HashMap<Variable, f64> = z.iter().copied().map(|v| (v, 1.0)).collect();
+
+        // Deliberately shorter than the item group to exercise the guard path.
+        let used_items: ItemUsageFlags = smallvec![false; 1];
+        let total = Money::from_minor(0, item_group.currency());
+
+        let (unaffected_items, total) =
+            collect_full_price_items(&item_group, &solution, &z, used_items, total)?;
+
+        assert_eq!(unaffected_items.as_slice(), &[0]);
+        assert_eq!(total.to_minor_units(), 100);
 
         Ok(())
     }
