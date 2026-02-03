@@ -21,6 +21,11 @@ pub mod promotions;
 /// Binary threshold for determining truthiness
 pub const BINARY_THRESHOLD: f64 = 0.5;
 
+type ItemIndexList = SmallVec<[usize; 10]>;
+type ItemUsageFlags = SmallVec<[bool; 10]>;
+type AppliedPromotionState<'a> = (ItemIndexList, ItemUsageFlags, Money<'a, iso::Currency>);
+type FullPriceState<'a> = (ItemIndexList, Money<'a, iso::Currency>);
+
 /// Solver using Integer Linear Programming (ILP)
 #[derive(Debug)]
 pub struct ILPSolver;
@@ -73,13 +78,10 @@ impl Solver for ILPSolver {
         let solution = model.solve()?;
 
         // Mark all items as unused initially
-        let mut used_items: SmallVec<[bool; 10]> = smallvec![false; items.len()];
+        let mut used_items: ItemUsageFlags = smallvec![false; items.len()];
 
         // The total cost of this set of items
         let mut total = Money::from_minor(0, basket.currency());
-
-        // The indexes of items that are being affected by promotions
-        let mut affected_items: SmallVec<[usize; 10]> = SmallVec::new();
 
         // Collected promotion applications with bundle IDs and price details
         let mut promotion_applications: SmallVec<[PromotionApplication<'a>; 10]> = SmallVec::new();
@@ -87,35 +89,26 @@ impl Solver for ILPSolver {
         // Counter for unique bundle IDs across all promotions
         let mut next_bundle_id: usize = 0;
 
+        // The indexes of items that are being affected by promotions
+        let mut affected_items: ItemIndexList = ItemIndexList::new();
+
         // Process each promotion's results
         for instance in promotion_instances.iter() {
             let apps =
                 instance.calculate_item_applications(&solution, basket, items, &mut next_bundle_id);
 
-            apply_applications(
-                items,
-                &mut used_items,
-                &mut affected_items,
-                &mut total,
-                &apps,
-            )?;
+            let (applied_items, updated_used_items, updated_total) =
+                apply_promotion_applications(items, used_items, total, &apps)?;
+
+            affected_items.extend(applied_items);
+            used_items = updated_used_items;
+            total = updated_total;
 
             promotion_applications.extend(apps);
         }
 
-        // Convert the MILP solution back into our domain result
-
-        let mut unaffected_items = SmallVec::new();
-
-        collect_unaffected_items(
-            basket,
-            &solution,
-            &z,
-            items,
-            &mut used_items,
-            &mut unaffected_items,
-            &mut total,
-        )?;
+        let (unaffected_items, total) =
+            collect_full_price_items(basket, &solution, &z, items, used_items, total)?;
 
         Ok(SolverResult {
             affected_items,
@@ -183,15 +176,16 @@ fn build_presence_variables_and_objective<'a>(
 ///
 /// Returns a [`SolverError`] if any items contains a Money amount in minor units
 /// that cannot be represented exactly as a solver coefficient.
-fn collect_unaffected_items<'a>(
+fn collect_full_price_items<'a>(
     basket: &'a Basket<'a>,
     solution: &impl Solution,
     z: &[Variable],
     items: &[usize],
-    used_items: &mut [bool],
-    unaffected_items: &mut SmallVec<[usize; 10]>,
-    total: &mut Money<'a, iso::Currency>,
-) -> Result<(), SolverError> {
+    mut used_items: ItemUsageFlags,
+    mut total: Money<'a, iso::Currency>,
+) -> Result<FullPriceState<'a>, SolverError> {
+    let mut unaffected_items = SmallVec::new();
+
     // Any item that wasn't claimed by a promotion is treated as an unaffected
     // full-price item and contributes its full price to the total.
     z.iter()
@@ -206,7 +200,7 @@ fn collect_unaffected_items<'a>(
                 unaffected_items.push(item_idx);
 
                 // Add the item's full price to the result total.
-                *total = total.add(*basket.get_item(item_idx)?.price())?;
+                total = total.add(*basket.get_item(item_idx)?.price())?;
 
                 // Mark the item as used.
                 *used = true;
@@ -215,7 +209,7 @@ fn collect_unaffected_items<'a>(
             Ok(())
         })?;
 
-    Ok(())
+    Ok((unaffected_items, total))
 }
 
 /// Apply promotion applications to track affected items and accumulate total.
@@ -231,13 +225,15 @@ fn collect_unaffected_items<'a>(
 /// # Errors
 ///
 /// Returns a [`SolverError`] if adding a final price to `total` fails.
-fn apply_applications<'a>(
+fn apply_promotion_applications<'a>(
     items: &[usize],
-    used_items: &mut [bool],
-    affected_items: &mut SmallVec<[usize; 10]>,
-    total: &mut Money<'a, iso::Currency>,
+    mut used_items: ItemUsageFlags,
+    mut total: Money<'a, iso::Currency>,
     applications: &[PromotionApplication<'a>],
-) -> Result<(), SolverError> {
+) -> Result<AppliedPromotionState<'a>, SolverError> {
+    // The indexes of items that are being affected by promotions
+    let mut affected_items: ItemIndexList = ItemIndexList::new();
+
     for app in applications {
         // Find the position of this item in the items slice
         let Some(pos) = items.iter().position(|&idx| idx == app.item_idx) else {
@@ -260,10 +256,10 @@ fn apply_applications<'a>(
         affected_items.push(app.item_idx);
 
         // Add the final price to the running total.
-        *total = total.add(app.final_price)?;
+        total = total.add(app.final_price)?;
     }
 
-    Ok(())
+    Ok((affected_items, used_items, total))
 }
 
 /// Convert an `i64` to an `f64` if it can be represented exactly.
@@ -347,17 +343,15 @@ mod tests {
     fn apply_applications_skips_pre_used_positions() -> TestResult {
         // `apply_applications` uses `used_items` (indexed by position in the `items` slice)
         // to prevent an item position from being claimed by more than one promotion.
-        let mut used_items = vec![false; 3];
+        let mut used_items: ItemUsageFlags = smallvec![false; 3];
 
         // Simulate a different promotion already consuming the middle position.
         if let Some(used) = used_items.get_mut(1) {
             *used = true;
         }
 
-        let mut affected_items: SmallVec<[usize; 10]> = SmallVec::new();
-
         // Start from zero so any applied discount would be visible in the result total.
-        let mut total = Money::from_minor(0, iso::GBP);
+        let total = Money::from_minor(0, iso::GBP);
 
         // Provide an application for item index 1, but the corresponding position is pre-used above.
         let applications = [PromotionApplication {
@@ -368,13 +362,8 @@ mod tests {
             final_price: Money::from_minor(150, iso::GBP),
         }];
 
-        apply_applications(
-            &[0, 1, 2],
-            &mut used_items,
-            &mut affected_items,
-            &mut total,
-            &applications,
-        )?;
+        let (affected_items, _used_items, total) =
+            apply_promotion_applications(&[0, 1, 2], used_items, total, &applications)?;
 
         // Because the only discounted item was already marked "used", nothing should be applied.
         assert!(affected_items.is_empty());
@@ -385,9 +374,8 @@ mod tests {
 
     #[test]
     fn apply_applications_skips_items_not_in_selection() -> TestResult {
-        let mut used_items = vec![false; 2];
-        let mut affected_items: SmallVec<[usize; 10]> = SmallVec::new();
-        let mut total = Money::from_minor(0, iso::GBP);
+        let used_items: ItemUsageFlags = smallvec![false; 2];
+        let total = Money::from_minor(0, iso::GBP);
 
         let applications = [PromotionApplication {
             promotion_key: PromotionKey::default(),
@@ -397,13 +385,8 @@ mod tests {
             final_price: Money::from_minor(150, iso::GBP),
         }];
 
-        apply_applications(
-            &[0, 1],
-            &mut used_items,
-            &mut affected_items,
-            &mut total,
-            &applications,
-        )?;
+        let (affected_items, _used_items, total) =
+            apply_promotion_applications(&[0, 1], used_items, total, &applications)?;
 
         assert!(affected_items.is_empty());
         assert_eq!(total.to_minor_units(), 0);
@@ -624,21 +607,13 @@ mod tests {
 
         let solution: HashMap<Variable, f64> = z.iter().copied().map(|v| (v, 1.0)).collect();
 
-        let mut used_items = vec![false; 3];
+        let mut used_items: ItemUsageFlags = smallvec![false; 3];
         used_items[1] = true; // pretend item 1 was claimed by a promotion
 
-        let mut unaffected_items = SmallVec::new();
-        let mut total = Money::from_minor(0, basket.currency());
+        let total = Money::from_minor(0, basket.currency());
 
-        collect_unaffected_items(
-            &basket,
-            &solution,
-            &z,
-            &[0, 1, 2],
-            &mut used_items,
-            &mut unaffected_items,
-            &mut total,
-        )?;
+        let (unaffected_items, total) =
+            collect_full_price_items(&basket, &solution, &z, &[0, 1, 2], used_items, total)?;
 
         assert_eq!(unaffected_items.as_slice(), &[0, 2]);
         assert_eq!(total.to_minor_units(), 400);

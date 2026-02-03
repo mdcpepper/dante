@@ -29,8 +29,8 @@ use dante::{
 /// Simple Discounts Example
 #[expect(clippy::print_stdout, reason = "Example code")]
 pub fn main() -> Result<()> {
+    // Create Products
     let mut product_meta = SlotMap::<ProductKey, Product<'_>>::with_key();
-    let mut promotion_meta = SlotMap::<PromotionKey, PromotionMeta>::with_key();
 
     let sandwich_product = product_meta.insert(Product {
         name: "Sandwich".to_string(),
@@ -69,6 +69,7 @@ pub fn main() -> Result<()> {
     let snack_item = Item::with_tags(snack_key, snack.price, snack.tags.clone());
 
     // Create promotions
+    let mut promotion_meta = SlotMap::<PromotionKey, PromotionMeta>::with_key();
 
     let promo_20_key = promotion_meta.insert(PromotionMeta {
         name: "20% off".to_string(),
