@@ -337,10 +337,12 @@ mod tests {
     use testresult::TestResult;
 
     use crate::{
-        discounts::Discount,
         items::{Item, groups::ItemGroup},
         products::ProductKey,
-        promotions::{Promotion, PromotionKey, simple_discount::SimpleDiscount},
+        promotions::{
+            Promotion, PromotionKey,
+            simple_discount::{SimpleDiscount, SimpleDiscountConfig},
+        },
         tags::{collection::TagCollection, string::StringTagCollection},
     };
 
@@ -378,7 +380,7 @@ mod tests {
         let promotion = Promotion::SimpleDiscount(SimpleDiscount::new(
             PromotionKey::default(),
             StringTagCollection::empty(),
-            Discount::SetBundleTotalPrice(Money::from_minor(50, iso::GBP)),
+            SimpleDiscountConfig::AmountOverride(Money::from_minor(50, iso::GBP)),
         ));
 
         let pb = ProblemVariables::new();

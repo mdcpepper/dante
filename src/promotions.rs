@@ -52,12 +52,14 @@ mod tests {
     use smallvec::SmallVec;
 
     use crate::{
-        discounts::Discount,
         items::groups::ItemGroup,
         tags::{collection::TagCollection, string::StringTagCollection},
     };
 
-    use super::{Promotion, PromotionKey, simple_discount::SimpleDiscount};
+    use super::{
+        Promotion, PromotionKey,
+        simple_discount::{SimpleDiscount, SimpleDiscountConfig},
+    };
 
     #[test]
     fn key_delegates_to_inner_promotion_key() {
@@ -70,7 +72,7 @@ mod tests {
         let inner = SimpleDiscount::new(
             key,
             StringTagCollection::empty(),
-            Discount::SetBundleTotalPrice(Money::from_minor(50, iso::GBP)),
+            SimpleDiscountConfig::AmountOverride(Money::from_minor(50, iso::GBP)),
         );
 
         let promo = Promotion::SimpleDiscount(inner);
@@ -91,7 +93,7 @@ mod tests {
         let inner = SimpleDiscount::new(
             PromotionKey::default(),
             StringTagCollection::empty(),
-            Discount::SetBundleTotalPrice(Money::from_minor(50, iso::GBP)),
+            SimpleDiscountConfig::AmountOverride(Money::from_minor(50, iso::GBP)),
         );
 
         let promo = Promotion::SimpleDiscount(inner);

@@ -57,6 +57,10 @@ pub enum FixtureError {
     #[error("Unsupported promotion type: {0}")]
     UnsupportedPromotionType(String),
 
+    /// Invalid promotion data
+    #[error("Invalid promotion data: {0}")]
+    InvalidPromotionData(String),
+
     /// Currency mismatch between products
     #[error("Currency mismatch: expected {0}, found {1}")]
     CurrencyMismatch(String, String),
