@@ -1,16 +1,14 @@
-//! Direct Discounts Example
+//! Positional Discounts Example
 //!
-//! This example demonstrates simple percentage discounts applied directly to
-//! individual items. Two promotions are configured, one that applies a 20%
-//! discount to items tagged "20-off", and one that applies a 40% discount to
-//! items tagged "40-off".
+//! This example demonstrates percentage discounts that are applied to the nth
+//! item in each bundle, when qualifying items are sorted by descending price.
 //!
-//! Run with: `cargo run --example direct_discounts`
+//! This covers promotions such as "Buy 1 Get 1 Free", "Buy 1 Get 1 Half Price",
+//!  "3 for 2", etc.
 
-use std::{io, time::Instant};
+use std::{io::Write, time::Instant};
 
 use anyhow::Result;
-
 use clap::Parser;
 use dante::{
     fixtures::Fixture,
@@ -20,13 +18,12 @@ use dante::{
     utils::ExampleBasketArgs,
 };
 
-/// Direct Discounts Example
-#[expect(clippy::print_stdout, reason = "Example code")]
+/// Positional Discounts Example
 pub fn main() -> Result<()> {
     let args = ExampleBasketArgs::parse();
 
     // Load fixture set
-    let fixture = Fixture::from_set("example_direct_discounts")?;
+    let fixture = Fixture::from_set("example_positional_discounts")?;
 
     let basket = fixture.basket(args.n)?;
     let item_group = ItemGroup::from(&basket);
@@ -38,17 +35,19 @@ pub fn main() -> Result<()> {
 
     let elapsed = start.elapsed().as_secs_f32();
 
-    let stdout = io::stdout();
+    let receipt = Receipt::from_solver_result(&basket, result)?;
+
+    let stdout = std::io::stdout();
     let mut handle = stdout.lock();
 
-    Receipt::from_solver_result(&basket, result)?.write_to(
+    receipt.write_to(
         &mut handle,
         &basket,
         fixture.product_meta_map(),
         fixture.promotion_meta_map(),
     )?;
 
-    println!("\nSolution: {elapsed}s");
+    writeln!(handle, "\nSolution: {elapsed}s")?;
 
     Ok(())
 }

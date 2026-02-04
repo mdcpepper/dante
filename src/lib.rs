@@ -12,3 +12,4 @@ pub mod promotions;
 pub mod receipt;
 pub mod solvers;
 pub mod tags;
+pub mod utils;

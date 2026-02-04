@@ -151,7 +151,7 @@ fn build_presence_variables_and_objective(
     item_group: &ItemGroup<'_>,
     pb: &mut ProblemVariables,
 ) -> Result<(SmallVec<[Variable; 10]>, Expression), SolverError> {
-    // Each item must be present in the solution whether a promotion is applied or not.
+    // Each item must be present in the solution whether participating in a promotion or not.
     // Create a presence variable for each item representing the full-price option.
     let presence: SmallVec<[Variable; 10]> = (0..item_group.len())
         .map(|_| pb.add(variable().binary()))
@@ -176,7 +176,7 @@ fn build_presence_variables_and_objective(
             // round-trip check so we never silently change the objective.
             cost += var
                 * i64_to_f64_exact(minor_units)
-                    .ok_or(SolverError::MinorUnitsNotRepresentable { minor_units })?;
+                    .ok_or(SolverError::MinorUnitsNotRepresentable(minor_units))?;
 
             Ok(())
         })?;
@@ -194,10 +194,12 @@ fn collect_full_price_items<'group>(
     item_group: &'group ItemGroup<'_>,
     solution: &impl Solution,
     z: &[Variable],
-    mut used_items: ItemUsageFlags,
-    mut total: Money<'group, Currency>,
+    used_items: ItemUsageFlags,
+    total: Money<'group, Currency>,
 ) -> Result<FullPriceState<'group>, SolverError> {
     let mut unaffected_items = SmallVec::new();
+    let mut used_items = used_items;
+    let mut total = total;
 
     // Any item that wasn't claimed by a promotion is treated as an unaffected
     // full-price item and contributes its full price to the total.
@@ -240,12 +242,15 @@ fn collect_full_price_items<'group>(
 /// Returns a [`SolverError`] if adding a final price to `total` fails.
 fn apply_promotion_applications<'a>(
     item_count: usize,
-    mut used_items: ItemUsageFlags,
-    mut total: Money<'a, Currency>,
+    used_items: ItemUsageFlags,
+    total: Money<'a, Currency>,
     applications: &[PromotionApplication<'a>],
 ) -> Result<AppliedPromotionState<'a>, SolverError> {
     // The indexes of items that are being affected by promotions
     let mut affected_items: ItemIndexList = ItemIndexList::new();
+
+    let mut used_items = used_items;
+    let mut total = total;
 
     for app in applications {
         if app.item_idx >= item_count {
@@ -291,12 +296,12 @@ mod tests {
     use testresult::TestResult;
 
     use crate::{
+        discounts::SimpleDiscount,
         items::{Item, groups::ItemGroup},
         products::ProductKey,
         promotions::{
-            Promotion, PromotionKey,
-            applications::PromotionApplication,
-            direct_discount::{DirectDiscount, DirectDiscountPromotion},
+            Promotion, PromotionKey, applications::PromotionApplication,
+            direct_discount::DirectDiscountPromotion,
         },
         tags::{collection::TagCollection, string::StringTagCollection},
     };
@@ -421,7 +426,7 @@ mod tests {
         let promotions = [Promotion::DirectDiscount(DirectDiscountPromotion::new(
             PromotionKey::default(),
             StringTagCollection::from_strs(&["a"]),
-            DirectDiscount::Percentage(Percentage::from(0.25)),
+            SimpleDiscount::PercentageOff(Percentage::from(0.25)),
         ))];
 
         let result = ILPSolver::solve(&promotions, &item_group)?;
@@ -447,7 +452,7 @@ mod tests {
         let promotions = [Promotion::DirectDiscount(DirectDiscountPromotion::new(
             PromotionKey::default(),
             StringTagCollection::empty(),
-            DirectDiscount::AmountOverride(Money::from_minor(50, GBP)),
+            SimpleDiscount::AmountOverride(Money::from_minor(50, GBP)),
         ))];
 
         let result = ILPSolver::solve(&promotions, &item_group)?;
@@ -471,7 +476,7 @@ mod tests {
         let promotions = [Promotion::DirectDiscount(DirectDiscountPromotion::new(
             PromotionKey::default(),
             StringTagCollection::from_strs(&["missing"]),
-            DirectDiscount::Percentage(Percentage::from(0.25)),
+            SimpleDiscount::PercentageOff(Percentage::from(0.25)),
         ))];
 
         let result = ILPSolver::solve(&promotions, &item_group)?;
@@ -494,7 +499,7 @@ mod tests {
         let promotions = [Promotion::DirectDiscount(DirectDiscountPromotion::new(
             PromotionKey::default(),
             StringTagCollection::empty(),
-            DirectDiscount::AmountOverride(Money::from_minor(400, GBP)),
+            SimpleDiscount::AmountOverride(Money::from_minor(400, GBP)),
         ))];
 
         let result = ILPSolver::solve(&promotions, &item_group)?;
@@ -517,7 +522,7 @@ mod tests {
         let promotions = [Promotion::DirectDiscount(DirectDiscountPromotion::new(
             PromotionKey::default(),
             StringTagCollection::from_strs(&["a"]),
-            DirectDiscount::AmountOverride(Money::from_minor(50, GBP)),
+            SimpleDiscount::AmountOverride(Money::from_minor(50, GBP)),
         ))];
 
         let result = ILPSolver::solve(&promotions, &item_group)?;

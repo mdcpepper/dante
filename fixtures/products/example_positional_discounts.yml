@@ -1,0 +1,15 @@
+products:
+  multivitamins:
+    name: Multivitamins 30 gummies
+    tags: [3-for-2]
+    price: 4.50 GBP
+
+  vitamin-c:
+    name: Vitamin C 1000mg 20 Tablets
+    tags: [3-for-2]
+    price: 1.99 GBP
+
+  magnesium:
+     name: Magnesium 180 Tablets
+     tags: [3-for-2]
+     price: 12.85 GBP

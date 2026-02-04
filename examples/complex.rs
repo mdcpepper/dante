@@ -1,11 +1,8 @@
-//! Direct Discounts Example
+//! Complex Discounts Example
 //!
-//! This example demonstrates simple percentage discounts applied directly to
-//! individual items. Two promotions are configured, one that applies a 20%
-//! discount to items tagged "20-off", and one that applies a 40% discount to
-//! items tagged "40-off".
+//! This example demonstrates a basket with multiple promotion types
 //!
-//! Run with: `cargo run --example direct_discounts`
+//! Run with: `cargo run --example complex`
 
 use std::{io, time::Instant};
 
@@ -20,13 +17,13 @@ use dante::{
     utils::ExampleBasketArgs,
 };
 
-/// Direct Discounts Example
+/// Complex Discounts Example
 #[expect(clippy::print_stdout, reason = "Example code")]
 pub fn main() -> Result<()> {
     let args = ExampleBasketArgs::parse();
 
     // Load fixture set
-    let fixture = Fixture::from_set("example_direct_discounts")?;
+    let fixture = Fixture::from_set("example_complex")?;
 
     let basket = fixture.basket(args.n)?;
     let item_group = ItemGroup::from(&basket);

@@ -18,12 +18,9 @@ pub mod ilp;
 pub enum SolverError {
     /// Money amount in minor units cannot be represented exactly as a solver coefficient.
     #[error(
-        "money amount in minor units cannot be represented exactly as a solver coefficient: {minor_units}"
+        "money amount in minor units cannot be represented exactly as a solver coefficient: {0}"
     )]
-    MinorUnitsNotRepresentable {
-        /// Money amount in minor units
-        minor_units: i64,
-    },
+    MinorUnitsNotRepresentable(i64),
 
     /// Wrapped item group error
     #[error(transparent)]

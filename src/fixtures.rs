@@ -73,6 +73,15 @@ pub enum FixtureError {
     #[error("No items loaded; cannot create basket or item group")]
     NoItems,
 
+    /// Not enough items in fixture
+    #[error("Not enough items in fixture, available: {available}, requested: {requested}")]
+    NotEnoughItems {
+        /// Number of items defined in the fixture
+        available: usize,
+        /// Number of items requested
+        requested: usize,
+    },
+
     /// Basket creation error
     #[error("Failed to create basket: {0}")]
     Basket(#[from] crate::basket::BasketError),
@@ -311,14 +320,30 @@ impl<'a> Fixture<'a> {
     /// # Errors
     ///
     /// Returns an error if no items are loaded or if basket creation fails.
-    pub fn basket(&self) -> Result<Basket<'a>, FixtureError> {
+    pub fn basket(&self, n: Option<usize>) -> Result<Basket<'a>, FixtureError> {
         let currency = self.currency.ok_or(FixtureError::NoCurrency)?;
 
         if self.items.is_empty() {
             return Err(FixtureError::NoItems);
         }
 
-        Ok(Basket::with_items(self.items.clone(), currency)?)
+        if let Some(n) = n
+            && n > self.items.len()
+        {
+            return Err(FixtureError::NotEnoughItems {
+                requested: n,
+                available: self.items.len(),
+            });
+        }
+
+        let items: Vec<Item<'_>> = self
+            .items
+            .iter()
+            .take(n.unwrap_or(self.items.len()))
+            .cloned()
+            .collect();
+
+        Ok(Basket::with_items(items, currency)?)
     }
 
     /// Create an item group from the loaded items
@@ -423,12 +448,38 @@ mod tests {
     }
 
     #[test]
-    fn fixture_basket_creates_basket_from_items() -> TestResult {
+    fn fixture_basket_creates_basket_from_all_items() -> TestResult {
         let fixture = Fixture::from_set("example_direct_discounts")?;
-        let basket = fixture.basket()?;
+        let basket = fixture.basket(None)?;
 
         assert_eq!(basket.len(), 3);
         assert_eq!(basket.currency(), GBP);
+
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_basket_creates_basket_from_first_n_items() -> TestResult {
+        let fixture = Fixture::from_set("example_direct_discounts")?;
+        let basket = fixture.basket(Some(2))?;
+
+        assert_eq!(basket.len(), 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_basket_rejects_request_for_too_many_items() -> TestResult {
+        let fixture = Fixture::from_set("example_direct_discounts")?;
+        let result = fixture.basket(Some(10));
+
+        assert!(matches!(
+            result,
+            Err(FixtureError::NotEnoughItems {
+                requested: 10,
+                available: 3
+            })
+        ));
 
         Ok(())
     }
@@ -458,7 +509,7 @@ mod tests {
 
         fixture.load_products("example_direct_discounts")?;
 
-        let result = fixture.basket();
+        let result = fixture.basket(None);
 
         assert!(matches!(result, Err(FixtureError::NoItems)));
 
