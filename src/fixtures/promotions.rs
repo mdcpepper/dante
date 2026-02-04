@@ -4,15 +4,15 @@ use rustc_hash::FxHashMap;
 use serde::Deserialize;
 
 use crate::{
-    fixtures::{FixtureError, promotions::simple_discount::SimpleDiscountFixtureConfig},
+    fixtures::{FixtureError, promotions::direct_discount::DirectDiscountFixtureConfig},
     promotions::{
         Promotion, PromotionKey, PromotionMeta,
-        simple_discount::{SimpleDiscount, SimpleDiscountConfig},
+        direct_discount::{DirectDiscount, DirectDiscountPromotion},
     },
     tags::string::StringTagCollection,
 };
 
-mod simple_discount;
+mod direct_discount;
 
 /// Wrapper for promotions in YAML
 #[derive(Debug, Deserialize)]
@@ -25,8 +25,8 @@ pub struct PromotionsFixture {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum PromotionFixture {
-    /// Simple discount promotion
-    SimpleDiscount {
+    /// Direct discount promotion
+    DirectDiscount {
         /// Promotion name
         name: String,
 
@@ -34,7 +34,7 @@ pub enum PromotionFixture {
         tags: Vec<String>,
 
         /// Discount configuration
-        discount: SimpleDiscountFixtureConfig,
+        discount: DirectDiscountFixtureConfig,
     },
 }
 
@@ -49,7 +49,7 @@ impl PromotionFixture {
         key: PromotionKey,
     ) -> Result<(PromotionMeta, Promotion<'static>), FixtureError> {
         match self {
-            PromotionFixture::SimpleDiscount {
+            PromotionFixture::DirectDiscount {
                 name,
                 tags,
                 discount,
@@ -57,12 +57,12 @@ impl PromotionFixture {
                 let meta = PromotionMeta { name: name.clone() };
 
                 // Convert discount using TryFrom
-                let config = SimpleDiscountConfig::try_from(discount)?;
+                let config = DirectDiscount::try_from(discount)?;
                 let tag_refs: Vec<&str> = tags.iter().map(String::as_str).collect();
                 let tags_collection = StringTagCollection::from_strs(&tag_refs);
 
-                let simple_discount = SimpleDiscount::new(key, tags_collection, config);
-                let promotion = Promotion::SimpleDiscount(simple_discount);
+                let direct_discount = DirectDiscountPromotion::new(key, tags_collection, config);
+                let promotion = Promotion::DirectDiscount(direct_discount);
 
                 Ok((meta, promotion))
             }
@@ -93,13 +93,13 @@ discount:
 
     #[test]
     fn discount_fixture_parses_percentage() -> Result<(), FixtureError> {
-        let fixture = SimpleDiscountFixtureConfig::Percentage { value: 0.15 };
+        let fixture = DirectDiscountFixtureConfig::Percentage { value: 0.15 };
 
-        let config = SimpleDiscountConfig::try_from(fixture)?;
+        let config = DirectDiscount::try_from(fixture)?;
 
         assert!(matches!(
             config,
-            SimpleDiscountConfig::Percentage(percent) if percent == Percentage::from(0.15)
+            DirectDiscount::Percentage(percent) if percent == Percentage::from(0.15)
         ));
 
         Ok(())
@@ -107,15 +107,15 @@ discount:
 
     #[test]
     fn discount_fixture_parses_amount_override() -> Result<(), FixtureError> {
-        let fixture = SimpleDiscountFixtureConfig::AmountOverride {
+        let fixture = DirectDiscountFixtureConfig::AmountOverride {
             value: "2.50 GBP".to_string(),
         };
 
-        let config = SimpleDiscountConfig::try_from(fixture)?;
+        let config = DirectDiscount::try_from(fixture)?;
 
         assert!(matches!(
             config,
-            SimpleDiscountConfig::AmountOverride(money) if money.to_minor_units() == 250
+            DirectDiscount::AmountOverride(money) if money.to_minor_units() == 250
                 && money.currency() == GBP
         ));
 
@@ -124,15 +124,15 @@ discount:
 
     #[test]
     fn discount_fixture_parses_amount_discount_off() -> Result<(), FixtureError> {
-        let fixture = SimpleDiscountFixtureConfig::AmountDiscountOff {
+        let fixture = DirectDiscountFixtureConfig::AmountDiscountOff {
             value: "0.75 GBP".to_string(),
         };
 
-        let config = SimpleDiscountConfig::try_from(fixture)?;
+        let config = DirectDiscount::try_from(fixture)?;
 
         assert!(matches!(
             config,
-            SimpleDiscountConfig::AmountDiscountOff(money) if money.to_minor_units() == 75
+            DirectDiscount::AmountOff(money) if money.to_minor_units() == 75
                 && money.currency() == GBP
         ));
 
@@ -145,7 +145,7 @@ discount:
 type: mystery_discount
 value: 0.10
 ";
-        let result: Result<SimpleDiscountFixtureConfig, _> = serde_norway::from_str(yaml);
+        let result: Result<DirectDiscountFixtureConfig, _> = serde_norway::from_str(yaml);
         assert!(result.is_err());
     }
 
@@ -155,7 +155,7 @@ value: 0.10
 type: percentage
 value: not a number
 ";
-        let result: Result<SimpleDiscountFixtureConfig, _> = serde_norway::from_str(yaml);
+        let result: Result<DirectDiscountFixtureConfig, _> = serde_norway::from_str(yaml);
         assert!(result.is_err());
     }
 }

@@ -1,4 +1,4 @@
-//! Simple Discount Promotion Fixtures
+//! Direct Discount Promotion Fixtures
 
 use decimal_percentage::Percentage;
 use rusty_money::Money;
@@ -6,13 +6,13 @@ use serde::Deserialize;
 
 use crate::{
     fixtures::{FixtureError, products::parse_price},
-    promotions::simple_discount::SimpleDiscountConfig,
+    promotions::direct_discount::DirectDiscount,
 };
 
-/// Simple Discount configuration from YAML fixtures
+/// Direct Discount configuration from YAML fixtures
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum SimpleDiscountFixtureConfig {
+pub enum DirectDiscountFixtureConfig {
     /// Percentage discount (value between 0.0 and 1.0)
     Percentage {
         /// Discount percentage as decimal (e.g., 0.15 for 15%)
@@ -32,26 +32,26 @@ pub enum SimpleDiscountFixtureConfig {
     },
 }
 
-impl TryFrom<SimpleDiscountFixtureConfig> for SimpleDiscountConfig<'static> {
+impl TryFrom<DirectDiscountFixtureConfig> for DirectDiscount<'_> {
     type Error = FixtureError;
 
-    fn try_from(config: SimpleDiscountFixtureConfig) -> Result<Self, Self::Error> {
+    fn try_from(config: DirectDiscountFixtureConfig) -> Result<Self, Self::Error> {
         match config {
-            SimpleDiscountFixtureConfig::Percentage { value } => {
-                Ok(SimpleDiscountConfig::Percentage(Percentage::from(value)))
+            DirectDiscountFixtureConfig::Percentage { value } => {
+                Ok(DirectDiscount::Percentage(Percentage::from(value)))
             }
-            SimpleDiscountFixtureConfig::AmountOverride { value } => {
+            DirectDiscountFixtureConfig::AmountOverride { value } => {
                 let (minor_units, currency) = parse_price(&value)?;
 
-                Ok(SimpleDiscountConfig::AmountOverride(Money::from_minor(
+                Ok(DirectDiscount::AmountOverride(Money::from_minor(
                     minor_units,
                     currency,
                 )))
             }
-            SimpleDiscountFixtureConfig::AmountDiscountOff { value } => {
+            DirectDiscountFixtureConfig::AmountDiscountOff { value } => {
                 let (minor_units, currency) = parse_price(&value)?;
 
-                Ok(SimpleDiscountConfig::AmountDiscountOff(Money::from_minor(
+                Ok(DirectDiscount::AmountOff(Money::from_minor(
                     minor_units,
                     currency,
                 )))

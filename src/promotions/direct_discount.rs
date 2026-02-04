@@ -1,6 +1,6 @@
-//! Simple Discount
+//! Direct Discount
 //!
-//! A simple fixed amount or percentage discount on all qualifying items
+//! A direct percentage discount, amount discount, or amount override on all qualifying items
 
 use crate::{
     discounts::{DiscountError, percent_of_minor},
@@ -11,9 +11,9 @@ use crate::{
 use decimal_percentage::Percentage;
 use rusty_money::{Money, iso::Currency};
 
-/// Discount configuration for `SimpleDiscount` promotions.
+/// Discount configuration for `DirectDiscount` promotions.
 #[derive(Debug, Copy, Clone)]
-pub enum SimpleDiscountConfig<'a> {
+pub enum DirectDiscount<'a> {
     /// Apply a percentage discount (e.g., "25% off")
     Percentage(Percentage),
 
@@ -21,20 +21,20 @@ pub enum SimpleDiscountConfig<'a> {
     AmountOverride(Money<'a, Currency>),
 
     /// Subtract a fixed amount from item price (e.g., "£2 off")
-    AmountDiscountOff(Money<'a, Currency>),
+    AmountOff(Money<'a, Currency>),
 }
 
-/// A Simple Fixed or Percentage Discount
+/// A discount applied directly to all participating items
 #[derive(Debug, Copy, Clone)]
-pub struct SimpleDiscount<'a, T: TagCollection = StringTagCollection> {
+pub struct DirectDiscountPromotion<'a, T: TagCollection = StringTagCollection> {
     key: PromotionKey,
     tags: T,
-    config: SimpleDiscountConfig<'a>,
+    config: DirectDiscount<'a>,
 }
 
-impl<'a, T: TagCollection> SimpleDiscount<'a, T> {
-    /// Create a new simple discount promotion.
-    pub fn new(key: PromotionKey, tags: T, config: SimpleDiscountConfig<'a>) -> Self {
+impl<'a, T: TagCollection> DirectDiscountPromotion<'a, T> {
+    /// Create a new direct discount promotion.
+    pub fn new(key: PromotionKey, tags: T, config: DirectDiscount<'a>) -> Self {
         Self { key, tags, config }
     }
 
@@ -48,11 +48,6 @@ impl<'a, T: TagCollection> SimpleDiscount<'a, T> {
         &self.tags
     }
 
-    /// Returns the discount configuration
-    pub fn config(&self) -> &SimpleDiscountConfig<'a> {
-        &self.config
-    }
-
     /// Calculate the discounted price for a single item.
     ///
     /// # Errors
@@ -64,26 +59,30 @@ impl<'a, T: TagCollection> SimpleDiscount<'a, T> {
         &self,
         item: &Item<'a, T>,
     ) -> Result<Money<'a, Currency>, DiscountError> {
-        match &self.config {
-            SimpleDiscountConfig::Percentage(pct) => {
+        let discounted_minor = match &self.config {
+            DirectDiscount::Percentage(pct) => {
                 // Calculate the discount amount in minor units
                 let original_minor = item.price().to_minor_units();
 
-                let discounted_minor = original_minor
+                original_minor
                     .checked_sub(percent_of_minor(pct, original_minor)?)
-                    .ok_or(DiscountError::PercentConversion)?;
-
-                Ok(Money::from_minor(discounted_minor, item.price().currency()))
+                    .ok_or(DiscountError::PercentConversion)?
             }
-            SimpleDiscountConfig::AmountOverride(amount) => {
+            DirectDiscount::AmountOverride(amount) => {
                 // Replace price with fixed amount
-                Ok(*amount)
+                amount.to_minor_units()
             }
-            SimpleDiscountConfig::AmountDiscountOff(amount) => {
+            DirectDiscount::AmountOff(amount) => {
                 // Subtract amount from price
-                Ok(item.price().sub(*amount)?)
+                item.price().sub(*amount)?.to_minor_units()
             }
-        }
+        };
+
+        Ok(if discounted_minor < 0 {
+            Money::from_minor(0, item.price().currency())
+        } else {
+            Money::from_minor(discounted_minor, item.price().currency())
+        })
     }
 }
 
@@ -103,10 +102,10 @@ mod tests {
         let mut keys = SlotMap::<PromotionKey, ()>::with_key();
         let key = keys.insert(());
 
-        let promo = SimpleDiscount::new(
+        let promo = DirectDiscountPromotion::new(
             key,
             StringTagCollection::empty(),
-            SimpleDiscountConfig::AmountOverride(Money::from_minor(0, iso::GBP)),
+            DirectDiscount::AmountOverride(Money::from_minor(0, iso::GBP)),
         );
 
         assert_eq!(promo.key(), key);
@@ -115,10 +114,10 @@ mod tests {
 
     #[test]
     fn calculate_discounted_price_percentage() -> TestResult {
-        let promo = SimpleDiscount::new(
+        let promo = DirectDiscountPromotion::new(
             PromotionKey::default(),
             StringTagCollection::empty(),
-            SimpleDiscountConfig::Percentage(Percentage::from(0.25)),
+            DirectDiscount::Percentage(Percentage::from(0.25)),
         );
 
         let item = Item::new(ProductKey::default(), Money::from_minor(100, iso::GBP));
@@ -131,10 +130,10 @@ mod tests {
 
     #[test]
     fn calculate_discounted_price_amount_override() -> TestResult {
-        let promo = SimpleDiscount::new(
+        let promo = DirectDiscountPromotion::new(
             PromotionKey::default(),
             StringTagCollection::empty(),
-            SimpleDiscountConfig::AmountOverride(Money::from_minor(50, iso::GBP)),
+            DirectDiscount::AmountOverride(Money::from_minor(50, iso::GBP)),
         );
 
         let item = Item::new(ProductKey::default(), Money::from_minor(100, iso::GBP));
@@ -147,16 +146,64 @@ mod tests {
 
     #[test]
     fn calculate_discounted_price_amount_discount_off() -> TestResult {
-        let promo = SimpleDiscount::new(
+        let promo = DirectDiscountPromotion::new(
             PromotionKey::default(),
             StringTagCollection::empty(),
-            SimpleDiscountConfig::AmountDiscountOff(Money::from_minor(25, iso::GBP)),
+            DirectDiscount::AmountOff(Money::from_minor(25, iso::GBP)),
         );
 
         let item = Item::new(ProductKey::default(), Money::from_minor(100, iso::GBP));
         let discounted = promo.calculate_discounted_price(&item)?;
 
         assert_eq!(discounted, Money::from_minor(75, iso::GBP));
+
+        Ok(())
+    }
+
+    #[test]
+    fn calculate_discounted_price_clamps_percentage_to_zero() -> TestResult {
+        let promo = DirectDiscountPromotion::new(
+            PromotionKey::default(),
+            StringTagCollection::empty(),
+            DirectDiscount::Percentage(Percentage::from(2.0)),
+        );
+
+        let item = Item::new(ProductKey::default(), Money::from_minor(100, iso::GBP));
+        let discounted = promo.calculate_discounted_price(&item)?;
+
+        assert_eq!(discounted, Money::from_minor(0, iso::GBP));
+
+        Ok(())
+    }
+
+    #[test]
+    fn calculate_discounted_price_clamps_amount_off_to_zero() -> TestResult {
+        let promo = DirectDiscountPromotion::new(
+            PromotionKey::default(),
+            StringTagCollection::empty(),
+            DirectDiscount::AmountOff(Money::from_minor(200, iso::GBP)),
+        );
+
+        let item = Item::new(ProductKey::default(), Money::from_minor(100, iso::GBP));
+        let discounted = promo.calculate_discounted_price(&item)?;
+
+        assert_eq!(discounted, Money::from_minor(0, iso::GBP));
+
+        Ok(())
+    }
+
+    #[test]
+    fn calculate_discounted_price_clamps_amount_override_to_zero() -> TestResult {
+        let promo = DirectDiscountPromotion::new(
+            PromotionKey::default(),
+            StringTagCollection::empty(),
+            DirectDiscount::AmountOverride(Money::from_minor(-50, iso::GBP)),
+        );
+
+        let item = Item::new(ProductKey::default(), Money::from_minor(100, iso::GBP));
+        let discounted = promo.calculate_discounted_price(&item)?;
+
+        assert_eq!(discounted, Money::from_minor(0, iso::GBP));
 
         Ok(())
     }

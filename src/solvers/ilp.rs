@@ -296,7 +296,7 @@ mod tests {
         promotions::{
             Promotion, PromotionKey,
             applications::PromotionApplication,
-            simple_discount::{SimpleDiscount, SimpleDiscountConfig},
+            direct_discount::{DirectDiscount, DirectDiscountPromotion},
         },
         tags::{collection::TagCollection, string::StringTagCollection},
     };
@@ -418,10 +418,10 @@ mod tests {
         let items = test_items_with_tags();
         let item_group = item_group_from_items(items);
 
-        let promotions = [Promotion::SimpleDiscount(SimpleDiscount::new(
+        let promotions = [Promotion::DirectDiscount(DirectDiscountPromotion::new(
             PromotionKey::default(),
             StringTagCollection::from_strs(&["a"]),
-            SimpleDiscountConfig::Percentage(Percentage::from(0.25)),
+            DirectDiscount::Percentage(Percentage::from(0.25)),
         ))];
 
         let result = ILPSolver::solve(&promotions, &item_group)?;
@@ -444,10 +444,10 @@ mod tests {
         let items = test_items();
         let item_group = item_group_from_items(items);
 
-        let promotions = [Promotion::SimpleDiscount(SimpleDiscount::new(
+        let promotions = [Promotion::DirectDiscount(DirectDiscountPromotion::new(
             PromotionKey::default(),
             StringTagCollection::empty(),
-            SimpleDiscountConfig::AmountOverride(Money::from_minor(50, GBP)),
+            DirectDiscount::AmountOverride(Money::from_minor(50, GBP)),
         ))];
 
         let result = ILPSolver::solve(&promotions, &item_group)?;
@@ -468,10 +468,10 @@ mod tests {
         let items = test_items();
         let item_group = item_group_from_items(items);
 
-        let promotions = [Promotion::SimpleDiscount(SimpleDiscount::new(
+        let promotions = [Promotion::DirectDiscount(DirectDiscountPromotion::new(
             PromotionKey::default(),
             StringTagCollection::from_strs(&["missing"]),
-            SimpleDiscountConfig::Percentage(Percentage::from(0.25)),
+            DirectDiscount::Percentage(Percentage::from(0.25)),
         ))];
 
         let result = ILPSolver::solve(&promotions, &item_group)?;
@@ -491,10 +491,10 @@ mod tests {
         let items = test_items();
         let item_group = item_group_from_items(items);
 
-        let promotions = [Promotion::SimpleDiscount(SimpleDiscount::new(
+        let promotions = [Promotion::DirectDiscount(DirectDiscountPromotion::new(
             PromotionKey::default(),
             StringTagCollection::empty(),
-            SimpleDiscountConfig::AmountOverride(Money::from_minor(400, GBP)),
+            DirectDiscount::AmountOverride(Money::from_minor(400, GBP)),
         ))];
 
         let result = ILPSolver::solve(&promotions, &item_group)?;
@@ -514,10 +514,10 @@ mod tests {
         let items = test_items_with_tags();
         let item_group = item_group_from_items(items);
 
-        let promotions = [Promotion::SimpleDiscount(SimpleDiscount::new(
+        let promotions = [Promotion::DirectDiscount(DirectDiscountPromotion::new(
             PromotionKey::default(),
             StringTagCollection::from_strs(&["a"]),
-            SimpleDiscountConfig::AmountOverride(Money::from_minor(50, GBP)),
+            DirectDiscount::AmountOverride(Money::from_minor(50, GBP)),
         ))];
 
         let result = ILPSolver::solve(&promotions, &item_group)?;
@@ -547,7 +547,7 @@ mod tests {
         assert_eq!(second_app.original_price, Money::from_minor(300, iso::GBP));
         assert_eq!(second_app.final_price, Money::from_minor(50, iso::GBP));
 
-        // Each item should have a unique bundle_id (SimpleDiscount doesn't bundle)
+        // Each item should have a unique bundle_id (DirectDiscountPromotion doesn't bundle)
         assert_ne!(first_app.bundle_id, second_app.bundle_id);
 
         Ok(())
