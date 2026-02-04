@@ -1,0 +1,10 @@
+promotions:
+  3-for-2:
+    type: positional_discount
+    name: 3-for-2 Vitamins
+    tags: [3-for-2]
+    size: 3
+    positions: [2]
+    discount:
+      type: percentage_off
+      amount: 100%

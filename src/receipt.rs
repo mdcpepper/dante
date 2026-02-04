@@ -191,6 +191,7 @@ impl<'a> Receipt<'a> {
             .set_header(vec![
                 Cell::new("").add_attribute(Attribute::Bold),
                 Cell::new("Item").add_attribute(Attribute::Bold),
+                Cell::new("Tags").add_attribute(Attribute::Bold),
                 Cell::new("Base Price").add_attribute(Attribute::Bold),
                 Cell::new("Discounted Price").add_attribute(Attribute::Bold),
                 Cell::new("Savings").add_attribute(Attribute::Bold),
@@ -206,6 +207,13 @@ impl<'a> Receipt<'a> {
                 .get(item.product())
                 .ok_or(ReceiptError::MissingProduct(item.product()))?
                 .name;
+
+            let product_tags = &product_meta
+                .get(item.product())
+                .ok_or(ReceiptError::MissingProduct(item.product()))?
+                .tags
+                .to_strs()
+                .join("\n");
 
             let (base_price, final_price, savings, promo_name, bundle_id) =
                 match self.promotion_applications.get(&item_idx) {
@@ -247,6 +255,7 @@ impl<'a> Receipt<'a> {
             table.add_row(vec![
                 Cell::new(format!("#{:<3}", item_idx + 1)),
                 Cell::new(product_name.clone()),
+                Cell::new(product_tags).fg(Color::DarkGrey),
                 Cell::new(format!("{base_price}")),
                 final_price_display,
                 text_cell(savings),
@@ -631,6 +640,63 @@ mod tests {
 
         let result = receipt.write_to(Vec::new(), &basket, &product_meta, &promotion_meta);
         assert!(matches!(result, Err(ReceiptError::MissingProduct(_))));
+
+        Ok(())
+    }
+
+    #[test]
+    fn write_to_renders_unknown_promotion_name_and_full_price_items() -> TestResult {
+        let mut product_meta = SlotMap::<ProductKey, Product<'_>>::with_key();
+
+        let drink_price = Money::from_minor(100, iso::GBP);
+        let snack_price = Money::from_minor(120, iso::GBP);
+
+        let drink_key = product_meta.insert(Product {
+            name: "Drink".to_string(),
+            tags: StringTagCollection::from_strs(&["fruit"]),
+            price: drink_price,
+        });
+
+        let snack_key = product_meta.insert(Product {
+            name: "Snack".to_string(),
+            tags: StringTagCollection::from_strs(&["fruit"]),
+            price: snack_price,
+        });
+
+        let items = [
+            Item::new(drink_key, drink_price),
+            Item::new(snack_key, snack_price),
+        ];
+        let basket = Basket::with_items(items, iso::GBP)?;
+
+        let mut promotion_apps = FxHashMap::default();
+        promotion_apps.insert(
+            0,
+            PromotionApplication {
+                promotion_key: PromotionKey::default(),
+                item_idx: 0,
+                bundle_id: 0,
+                original_price: drink_price,
+                final_price: drink_price,
+            },
+        );
+
+        let receipt = Receipt::new(
+            smallvec![1],
+            promotion_apps,
+            Money::from_minor(220, iso::GBP),
+            Money::from_minor(220, iso::GBP),
+            iso::GBP,
+        );
+
+        let promotion_meta = SlotMap::<PromotionKey, PromotionMeta>::with_key();
+
+        let mut out = Vec::new();
+        receipt.write_to(&mut out, &basket, &product_meta, &promotion_meta)?;
+
+        let output = String::from_utf8(out)?;
+        assert!(output.contains("<unknown>"));
+        assert!(output.contains("Savings:"));
 
         Ok(())
     }

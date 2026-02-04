@@ -14,8 +14,12 @@ solver-microlp = ["good_lp/microlp"]
 # If you enable both, the code will prefer HiGHS.
 solver-highs = ["good_lp/highs"]
 
-[dependencies]
+[dev-dependencies]
 anyhow = "1.0.100"
+testresult = "0.4.1"
+
+[dependencies]
+clap = { version = "4.5.57", features = ["derive"] }
 comfy-table = "7.2.2"
 decimal-percentage = "0.1.4"
 good_lp = { version = "1.14.2", default-features = false }
@@ -27,7 +31,6 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_norway = "0.9.42"
 slotmap = "1.1.1"
 smallvec = "1.15.1"
-testresult = "0.4.1"
 thiserror = "2.0.18"
 
 [lints.rust]
@@ -42,8 +45,8 @@ missing_crate_level_docs = "warn"
 
 [lints.clippy]
 pedantic = { level = "deny", priority = -1 }
-unwrap_used = "forbid"
-expect_used = "forbid"
+unwrap_used = "deny"
+expect_used = "deny"
 panic = "deny"
 todo = "warn"
 must_use_candidate = "allow"

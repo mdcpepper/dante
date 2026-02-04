@@ -1,16 +1,16 @@
 promotions:
-  20_off:
+  20-off:
     type: direct_discount
     name: 20% Off
     tags: [20-off]
     discount:
-      type: percentage
-      value: 0.20
+      type: percentage_off
+      amount: 20%
 
-  40_off:
+  40-off:
     type: direct_discount
     name: 40% Off
     tags: [40-off]
     discount:
-      type: percentage
-      value: 0.40
+      type: percentage_off
+      amount: 40%

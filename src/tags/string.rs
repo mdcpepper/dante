@@ -37,6 +37,11 @@ impl StringTagCollection {
                 .collect::<SmallVec<[String; 5]>>(),
         )
     }
+
+    /// Convert the tag collection to a vector of strings.
+    pub fn to_strs(&self) -> SmallVec<[String; 5]> {
+        self.tags.clone()
+    }
 }
 
 impl TagCollection for StringTagCollection {

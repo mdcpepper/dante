@@ -1,0 +1,25 @@
+products:
+  shampoo:
+    name: Shampoo 400ml
+    tags: [toiletries, haircare]
+    price: 4.50 GBP
+
+  conditioner:
+    name: Conditioner 400ml
+    tags: [toiletries, haircare]
+    price: 4.00 GBP
+
+  travel-gel:
+    name: Travel Shower Gel 100ml
+    tags: [toiletries, haircare]
+    price: 1.00 GBP
+
+  body-wash:
+    name: Body Wash 500ml
+    tags: [toiletries, haircare]
+    price: 3.00 GBP
+
+  hair-mask:
+    name: Deep Repair Hair Mask 250ml
+    tags: [toiletries, haircare]
+    price: 6.00 GBP

@@ -8,7 +8,7 @@ use rust_decimal::{
     Decimal, RoundingStrategy,
     prelude::{FromPrimitive, ToPrimitive},
 };
-use rusty_money::MoneyError;
+use rusty_money::{Money, MoneyError, iso::Currency};
 use thiserror::Error;
 
 /// Errors specific to discount calculations.
@@ -25,6 +25,19 @@ pub enum DiscountError {
     /// Wrapped money arithmetic or currency mismatch error.
     #[error(transparent)]
     Money(#[from] MoneyError),
+}
+
+/// Discount configuration for promotions without complex requirements.
+#[derive(Debug, Copy, Clone)]
+pub enum SimpleDiscount<'a> {
+    /// Apply a percentage discount (e.g., "25% off")
+    PercentageOff(Percentage),
+
+    /// Replace item price with a fixed amount (e.g., "£5 each")
+    AmountOverride(Money<'a, Currency>),
+
+    /// Subtract a fixed amount from item price (e.g., "£2 off")
+    AmountOff(Money<'a, Currency>),
 }
 
 /// Calculate the discount amount in minor units based on a percentage and a minor unit amount.

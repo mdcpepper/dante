@@ -1,0 +1,18 @@
+promotions:
+  toiletries-15-off:
+    type: direct_discount
+    name: 15% Off Toiletries
+    tags: [toiletries]
+    discount:
+      type: percentage_off
+      amount: 15%
+
+  haircare-3-for-2:
+    type: positional_discount
+    name: 3-for-2 Haircare Mix & Match
+    tags: [haircare]
+    size: 3
+    positions: [2]
+    discount:
+      type: percentage_off
+      amount: 100%

@@ -1,5 +1,6 @@
 //! Product Fixtures
 
+use decimal_percentage::Percentage;
 use rust_decimal::{Decimal, prelude::ToPrimitive};
 use rustc_hash::FxHashMap;
 use rusty_money::{
@@ -89,6 +90,37 @@ pub fn parse_price(s: &str) -> Result<(i64, &'static Currency), FixtureError> {
     Ok((minor_units, currency))
 }
 
+/// Parse percentage string (e.g., "15%" or "0.15") into a `Percentage`
+///
+/// Accepts two formats:
+/// - Percentage format: "15%" for 15%
+/// - Decimal format: "0.15" for 15%
+///
+/// # Errors
+///
+/// Returns an error if the string cannot be parsed or if the value is invalid.
+pub fn parse_percentage(s: &str) -> Result<Percentage, FixtureError> {
+    let trimmed = s.trim();
+
+    if let Some(percent_str) = trimmed.strip_suffix('%') {
+        // Parse as percentage (e.g., "15%" -> 0.15)
+        let value = percent_str
+            .trim()
+            .parse::<f64>()
+            .map_err(|_err| FixtureError::InvalidPercentage(s.to_string()))?;
+
+        // Convert from percentage to decimal (15 -> 0.15)
+        Ok(Percentage::from(value / 100.0))
+    } else {
+        // Parse as decimal (e.g., "0.15" -> 0.15)
+        let value = trimmed
+            .parse::<f64>()
+            .map_err(|_err| FixtureError::InvalidPercentage(s.to_string()))?;
+
+        Ok(Percentage::from(value))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -116,6 +148,58 @@ mod tests {
         assert_eq!(usd, USD);
         assert_eq!(eur_minor, 250);
         assert_eq!(eur, EUR);
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_percentage_accepts_percentage_format() -> Result<(), FixtureError> {
+        let percent = parse_percentage("15%")?;
+
+        assert_eq!(percent, Percentage::from(0.15));
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_percentage_accepts_decimal_format() -> Result<(), FixtureError> {
+        let percent = parse_percentage("0.15")?;
+
+        assert_eq!(percent, Percentage::from(0.15));
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_percentage_accepts_100_percent() -> Result<(), FixtureError> {
+        let percent = parse_percentage("100%")?;
+
+        assert_eq!(percent, Percentage::from(1.0));
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_percentage_accepts_one_as_decimal() -> Result<(), FixtureError> {
+        let percent = parse_percentage("1")?;
+
+        assert_eq!(percent, Percentage::from(1.0));
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_percentage_rejects_invalid_format() {
+        let result = parse_percentage("invalid");
+
+        assert!(matches!(result, Err(FixtureError::InvalidPercentage(_))));
+    }
+
+    #[test]
+    fn parse_percentage_handles_whitespace() -> Result<(), FixtureError> {
+        let percent = parse_percentage("  15%  ")?;
+
+        assert_eq!(percent, Percentage::from(0.15));
 
         Ok(())
     }
