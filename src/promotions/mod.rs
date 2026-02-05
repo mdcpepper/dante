@@ -5,13 +5,15 @@ use slotmap::new_key_type;
 use crate::{
     items::groups::ItemGroup,
     promotions::{
-        direct_discount::DirectDiscountPromotion, positional_discount::PositionalDiscountPromotion,
+        direct_discount::DirectDiscountPromotion, mix_and_match::MixAndMatchPromotion,
+        positional_discount::PositionalDiscountPromotion,
     },
     solvers::ilp::promotions::ILPPromotion,
 };
 
 pub mod applications;
 pub mod direct_discount;
+pub mod mix_and_match;
 pub mod positional_discount;
 
 new_key_type! {
@@ -32,6 +34,9 @@ pub enum Promotion<'a> {
     /// Direct Discount Promotion
     DirectDiscount(DirectDiscountPromotion<'a>),
 
+    /// Mix-and-Match Bundle Promotion
+    MixAndMatch(MixAndMatchPromotion<'a>),
+
     /// Positional Discount
     PositionalDiscount(PositionalDiscountPromotion<'a>),
 }
@@ -41,6 +46,7 @@ impl Promotion<'_> {
     pub fn key(&self) -> PromotionKey {
         match self {
             Promotion::DirectDiscount(direct_discount) => direct_discount.key(),
+            Promotion::MixAndMatch(mix_and_match) => mix_and_match.key(),
             Promotion::PositionalDiscount(positional_discount) => positional_discount.key(),
         }
     }
@@ -49,6 +55,7 @@ impl Promotion<'_> {
     pub fn is_applicable(&self, item_group: &ItemGroup<'_>) -> bool {
         match self {
             Promotion::DirectDiscount(direct_discount) => direct_discount.is_applicable(item_group),
+            Promotion::MixAndMatch(mix_and_match) => mix_and_match.is_applicable(item_group),
             Promotion::PositionalDiscount(positional_discount) => {
                 positional_discount.is_applicable(item_group)
             }
@@ -68,6 +75,7 @@ mod tests {
         products::ProductKey,
         promotions::{
             direct_discount::DirectDiscountPromotion,
+            mix_and_match::{MixAndMatchPromotion, MixAndMatchSlot},
             positional_discount::PositionalDiscountPromotion,
         },
         tags::{collection::TagCollection, string::StringTagCollection},
@@ -153,6 +161,77 @@ mod tests {
         );
 
         let promo = Promotion::PositionalDiscount(inner);
+
+        assert!(promo.is_applicable(&item_group));
+    }
+
+    #[test]
+    fn key_delegates_to_mix_and_match_promotion() {
+        let mut keys = SlotMap::<PromotionKey, ()>::with_key();
+        let key = keys.insert(());
+
+        let slots = vec![MixAndMatchSlot::new(
+            "main".to_string(),
+            StringTagCollection::from_strs(&["main"]),
+            1,
+            Some(1),
+        )];
+
+        let inner = MixAndMatchPromotion::new(
+            key,
+            slots,
+            crate::promotions::mix_and_match::MixAndMatchDiscount::FixedTotal(Money::from_minor(
+                100, GBP,
+            )),
+        );
+
+        let promo = Promotion::MixAndMatch(inner);
+
+        assert_eq!(promo.key(), key);
+        assert_ne!(promo.key(), PromotionKey::default());
+    }
+
+    #[test]
+    fn is_applicable_handles_mix_and_match() {
+        let items: SmallVec<[Item<'_>; 10]> = SmallVec::from_vec(vec![
+            Item::with_tags(
+                ProductKey::default(),
+                Money::from_minor(100, GBP),
+                StringTagCollection::from_strs(&["main"]),
+            ),
+            Item::with_tags(
+                ProductKey::default(),
+                Money::from_minor(50, GBP),
+                StringTagCollection::from_strs(&["drink"]),
+            ),
+        ]);
+
+        let item_group: ItemGroup<'_> = ItemGroup::new(items, GBP);
+
+        let slots = vec![
+            MixAndMatchSlot::new(
+                "main".to_string(),
+                StringTagCollection::from_strs(&["main"]),
+                1,
+                Some(1),
+            ),
+            MixAndMatchSlot::new(
+                "drink".to_string(),
+                StringTagCollection::from_strs(&["drink"]),
+                1,
+                Some(1),
+            ),
+        ];
+
+        let inner = MixAndMatchPromotion::new(
+            PromotionKey::default(),
+            slots,
+            crate::promotions::mix_and_match::MixAndMatchDiscount::PercentAllItems(
+                decimal_percentage::Percentage::from(0.25),
+            ),
+        );
+
+        let promo = Promotion::MixAndMatch(inner);
 
         assert!(promo.is_applicable(&item_group));
     }
