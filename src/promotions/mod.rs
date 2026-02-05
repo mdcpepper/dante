@@ -1,6 +1,6 @@
 //! Promotions
 
-use slotmap::new_key_type;
+use slotmap::{SecondaryMap, new_key_type};
 
 use crate::{
     items::groups::ItemGroup,
@@ -21,11 +21,19 @@ new_key_type! {
     pub struct PromotionKey;
 }
 
+new_key_type! {
+    /// Promotion Slot Key
+    pub struct PromotionSlotKey;
+}
+
 /// Promotion metadata
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct PromotionMeta {
     /// Promotion name
     pub name: String,
+
+    /// Slot names
+    pub slot_names: SecondaryMap<PromotionSlotKey, String>,
 }
 
 /// Promotion enum
@@ -82,6 +90,15 @@ mod tests {
     };
 
     use super::*;
+
+    fn slot(
+        keys: &mut SlotMap<PromotionSlotKey, ()>,
+        tags: StringTagCollection,
+        min: usize,
+        max: Option<usize>,
+    ) -> MixAndMatchSlot {
+        MixAndMatchSlot::new(keys.insert(()), tags, min, max)
+    }
 
     #[test]
     fn key_delegates_to_inner_promotion_key() {
@@ -170,8 +187,9 @@ mod tests {
         let mut keys = SlotMap::<PromotionKey, ()>::with_key();
         let key = keys.insert(());
 
-        let slots = vec![MixAndMatchSlot::new(
-            "main".to_string(),
+        let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
+        let slots = vec![slot(
+            &mut slot_keys,
             StringTagCollection::from_strs(&["main"]),
             1,
             Some(1),
@@ -208,15 +226,16 @@ mod tests {
 
         let item_group: ItemGroup<'_> = ItemGroup::new(items, GBP);
 
+        let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
         let slots = vec![
-            MixAndMatchSlot::new(
-                "main".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["main"]),
                 1,
                 Some(1),
             ),
-            MixAndMatchSlot::new(
-                "drink".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["drink"]),
                 1,
                 Some(1),

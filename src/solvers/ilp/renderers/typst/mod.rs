@@ -1080,9 +1080,11 @@ mod tests {
         let mut promotions = SlotMap::<PromotionKey, PromotionMeta>::with_key();
         let promo_a = promotions.insert(PromotionMeta {
             name: "A promo".to_string(),
+            ..Default::default()
         });
         let promo_b = promotions.insert(PromotionMeta {
             name: "B promo".to_string(),
+            ..Default::default()
         });
 
         let mut renderer = TypstRenderer::new_with_metadata(
@@ -1194,9 +1196,11 @@ mod tests {
         let mut promotions = SlotMap::<PromotionKey, PromotionMeta>::with_key();
         let promo_b = promotions.insert(PromotionMeta {
             name: "B promo".to_string(),
+            ..Default::default()
         });
         let promo_a = promotions.insert(PromotionMeta {
             name: "A promo".to_string(),
+            ..Default::default()
         });
 
         let mut renderer = TypstRenderer::new_with_metadata(

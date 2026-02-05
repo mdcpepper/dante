@@ -2,6 +2,7 @@
 
 use decimal_percentage::Percentage;
 use rusty_money::{Money, iso::GBP};
+use slotmap::SlotMap;
 use testresult::TestResult;
 
 use dante::{
@@ -9,11 +10,12 @@ use dante::{
     items::{Item, groups::ItemGroup},
     products::ProductKey,
     promotions::{
-        Promotion, PromotionKey,
-        mix_and_match::{MixAndMatchDiscount, MixAndMatchPromotion, MixAndMatchSlot},
+        Promotion, PromotionKey, PromotionSlotKey,
+        mix_and_match::{MixAndMatchDiscount, MixAndMatchPromotion},
     },
     solvers::{Solver, ilp::ILPSolver},
     tags::string::StringTagCollection,
+    utils::slot,
 };
 
 #[test]
@@ -34,15 +36,16 @@ fn solver_handles_percent_all_items() -> TestResult {
     let basket = Basket::with_items(items, GBP)?;
     let item_group = ItemGroup::from(&basket);
 
+    let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
     let slots = vec![
-        MixAndMatchSlot::new(
-            "main".to_string(),
+        slot(
+            &mut slot_keys,
             StringTagCollection::from_strs(&["main"]),
             1,
             Some(1),
         ),
-        MixAndMatchSlot::new(
-            "drink".to_string(),
+        slot(
+            &mut slot_keys,
             StringTagCollection::from_strs(&["drink"]),
             1,
             Some(1),
@@ -86,21 +89,22 @@ fn solver_handles_percent_cheapest() -> TestResult {
     let basket = Basket::with_items(items, GBP)?;
     let item_group = ItemGroup::from(&basket);
 
+    let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
     let slots = vec![
-        MixAndMatchSlot::new(
-            "main".to_string(),
+        slot(
+            &mut slot_keys,
             StringTagCollection::from_strs(&["main"]),
             1,
             Some(1),
         ),
-        MixAndMatchSlot::new(
-            "drink".to_string(),
+        slot(
+            &mut slot_keys,
             StringTagCollection::from_strs(&["drink"]),
             1,
             Some(1),
         ),
-        MixAndMatchSlot::new(
-            "snack".to_string(),
+        slot(
+            &mut slot_keys,
             StringTagCollection::from_strs(&["snack"]),
             1,
             Some(1),
@@ -141,15 +145,16 @@ fn solver_handles_fixed_total() -> TestResult {
     let basket = Basket::with_items(items, GBP)?;
     let item_group = ItemGroup::from(&basket);
 
+    let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
     let slots = vec![
-        MixAndMatchSlot::new(
-            "main".to_string(),
+        slot(
+            &mut slot_keys,
             StringTagCollection::from_strs(&["main"]),
             1,
             Some(1),
         ),
-        MixAndMatchSlot::new(
-            "drink".to_string(),
+        slot(
+            &mut slot_keys,
             StringTagCollection::from_strs(&["drink"]),
             1,
             Some(1),
@@ -188,15 +193,16 @@ fn solver_handles_fixed_cheapest() -> TestResult {
     let basket = Basket::with_items(items, GBP)?;
     let item_group = ItemGroup::from(&basket);
 
+    let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
     let slots = vec![
-        MixAndMatchSlot::new(
-            "main".to_string(),
+        slot(
+            &mut slot_keys,
             StringTagCollection::from_strs(&["main"]),
             1,
             Some(1),
         ),
-        MixAndMatchSlot::new(
-            "drink".to_string(),
+        slot(
+            &mut slot_keys,
             StringTagCollection::from_strs(&["drink"]),
             1,
             Some(1),
@@ -242,8 +248,9 @@ fn solver_handles_variable_arity_bundles() -> TestResult {
     let basket = Basket::with_items(items, GBP)?;
     let item_group = ItemGroup::from(&basket);
 
-    let slots = vec![MixAndMatchSlot::new(
-        "snack".to_string(),
+    let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
+    let slots = vec![slot(
+        &mut slot_keys,
         StringTagCollection::from_strs(&["snack"]),
         2,
         None, // Variable arity
@@ -292,8 +299,9 @@ fn solver_handles_variable_arity_with_max() -> TestResult {
     let basket = Basket::with_items(items, GBP)?;
     let item_group = ItemGroup::from(&basket);
 
-    let slots = vec![MixAndMatchSlot::new(
-        "snack".to_string(),
+    let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
+    let slots = vec![slot(
+        &mut slot_keys,
         StringTagCollection::from_strs(&["snack"]),
         1,
         Some(2), // Variable arity with max
@@ -346,15 +354,16 @@ fn solver_handles_multiple_bundles() -> TestResult {
     let basket = Basket::with_items(items, GBP)?;
     let item_group = ItemGroup::from(&basket);
 
+    let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
     let slots = vec![
-        MixAndMatchSlot::new(
-            "main".to_string(),
+        slot(
+            &mut slot_keys,
             StringTagCollection::from_strs(&["main"]),
             1,
             Some(1),
         ),
-        MixAndMatchSlot::new(
-            "drink".to_string(),
+        slot(
+            &mut slot_keys,
             StringTagCollection::from_strs(&["drink"]),
             1,
             Some(1),
@@ -400,15 +409,16 @@ fn solver_skips_infeasible_mix_and_match() -> TestResult {
     let basket = Basket::with_items(items, GBP)?;
     let item_group = ItemGroup::from(&basket);
 
+    let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
     let slots = vec![
-        MixAndMatchSlot::new(
-            "main".to_string(),
+        slot(
+            &mut slot_keys,
             StringTagCollection::from_strs(&["main"]),
             1,
             Some(1),
         ),
-        MixAndMatchSlot::new(
-            "drink".to_string(),
+        slot(
+            &mut slot_keys,
             StringTagCollection::from_strs(&["drink"]),
             1,
             Some(1),

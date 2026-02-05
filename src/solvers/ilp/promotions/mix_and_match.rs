@@ -763,6 +763,7 @@ mod tests {
     use decimal_percentage::Percentage;
     use good_lp::{Solution, SolutionStatus, Variable};
     use rusty_money::{Money, iso::GBP};
+    use slotmap::SlotMap;
     use smallvec::SmallVec;
     use testresult::TestResult;
 
@@ -774,9 +775,10 @@ mod tests {
     use crate::{
         items::{Item, groups::ItemGroup},
         products::ProductKey,
-        promotions::{PromotionKey, mix_and_match::MixAndMatchSlot},
+        promotions::{PromotionKey, PromotionSlotKey},
         solvers::ilp::{NoopObserver, state::ILPState},
         tags::string::StringTagCollection,
+        utils::slot,
     };
 
     use super::*;
@@ -821,8 +823,9 @@ mod tests {
     fn is_applicable_checks_slots() {
         let item_group = item_group_from_prices(&[100]);
 
-        let slots = vec![MixAndMatchSlot::new(
-            "main".to_string(),
+        let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
+        let slots = vec![slot(
+            &mut slot_keys,
             StringTagCollection::from_strs(&["main"]),
             1,
             Some(1),
@@ -853,15 +856,16 @@ mod tests {
         ]);
 
         let item_group = ItemGroup::new(items, GBP);
+        let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
         let slots = vec![
-            MixAndMatchSlot::new(
-                "main".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["main"]),
                 1,
                 Some(1),
             ),
-            MixAndMatchSlot::new(
-                "drink".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["drink"]),
                 1,
                 Some(1),
@@ -905,15 +909,16 @@ mod tests {
         ]);
 
         let item_group = ItemGroup::new(items, GBP);
+        let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
         let slots = vec![
-            MixAndMatchSlot::new(
-                "main".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["main"]),
                 1,
                 Some(1),
             ),
-            MixAndMatchSlot::new(
-                "drink".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["drink"]),
                 1,
                 Some(1),
@@ -975,15 +980,16 @@ mod tests {
         ]);
 
         let item_group = ItemGroup::new(items, GBP);
+        let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
         let slots = vec![
-            MixAndMatchSlot::new(
-                "main".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["main"]),
                 1,
                 Some(1),
             ),
-            MixAndMatchSlot::new(
-                "drink".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["drink"]),
                 1,
                 Some(1),
@@ -1050,15 +1056,16 @@ mod tests {
         ]);
 
         let item_group = ItemGroup::new(items, GBP);
+        let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
         let slots = vec![
-            MixAndMatchSlot::new(
-                "main".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["main"]),
                 1,
                 Some(1),
             ),
-            MixAndMatchSlot::new(
-                "drink".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["drink"]),
                 1,
                 Some(1),
@@ -1130,15 +1137,16 @@ mod tests {
         ]);
 
         let item_group = ItemGroup::new(items, GBP);
+        let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
         let slots = vec![
-            MixAndMatchSlot::new(
-                "main".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["main"]),
                 1,
                 Some(1),
             ),
-            MixAndMatchSlot::new(
-                "drink".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["drink"]),
                 1,
                 Some(1),
@@ -1217,8 +1225,9 @@ mod tests {
         let item_group = ItemGroup::new(items, GBP);
 
         // Variable arity: min=2, max=None
-        let slots = vec![MixAndMatchSlot::new(
-            "main".to_string(),
+        let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
+        let slots = vec![slot(
+            &mut slot_keys,
             StringTagCollection::from_strs(&["main"]),
             2,
             None, // No max - variable arity
@@ -1263,15 +1272,16 @@ mod tests {
         ]);
 
         let item_group = ItemGroup::new(items, GBP);
+        let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
         let slots = vec![
-            MixAndMatchSlot::new(
-                "main".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["main"]),
                 1,
                 Some(1),
             ),
-            MixAndMatchSlot::new(
-                "drink".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["drink"]),
                 1,
                 Some(1),
@@ -1350,15 +1360,16 @@ mod tests {
         ]);
 
         let item_group = ItemGroup::new(items, GBP);
+        let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
         let slots = vec![
-            MixAndMatchSlot::new(
-                "main".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["main"]),
                 1,
                 Some(1),
             ),
-            MixAndMatchSlot::new(
-                "drink".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["drink"]),
                 1,
                 Some(1),
@@ -1415,8 +1426,9 @@ mod tests {
         let items: SmallVec<[Item<'_>; 10]> = SmallVec::new();
         let item_group = ItemGroup::new(items, GBP);
 
-        let slots = vec![MixAndMatchSlot::new(
-            "main".to_string(),
+        let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
+        let slots = vec![slot(
+            &mut slot_keys,
             StringTagCollection::from_strs(&["main"]),
             1,
             Some(1),
@@ -1454,15 +1466,16 @@ mod tests {
 
         let item_group = ItemGroup::new(items, GBP);
 
+        let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
         let slots = vec![
-            MixAndMatchSlot::new(
-                "main".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["main"]),
                 1,
                 Some(1),
             ),
-            MixAndMatchSlot::new(
-                "drink".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["drink"]),
                 1,
                 Some(1),
@@ -1514,8 +1527,9 @@ mod tests {
         let item_group = ItemGroup::new(items, GBP);
 
         // Variable arity with max: min=1, max=2
-        let slots = vec![MixAndMatchSlot::new(
-            "main".to_string(),
+        let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
+        let slots = vec![slot(
+            &mut slot_keys,
             StringTagCollection::from_strs(&["main"]),
             1,
             Some(2),
@@ -1578,8 +1592,9 @@ mod tests {
         )]);
 
         let item_group = ItemGroup::new(items, GBP);
-        let slots = vec![MixAndMatchSlot::new(
-            "main".to_string(),
+        let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
+        let slots = vec![slot(
+            &mut slot_keys,
             StringTagCollection::from_strs(&["main"]),
             1,
             Some(1),
@@ -1654,21 +1669,22 @@ mod tests {
         ]);
 
         let item_group = ItemGroup::new(items, GBP);
+        let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
         let slots = vec![
-            MixAndMatchSlot::new(
-                "main".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["main"]),
                 1,
                 Some(1),
             ),
-            MixAndMatchSlot::new(
-                "drink".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["drink"]),
                 1,
                 Some(1),
             ),
-            MixAndMatchSlot::new(
-                "snack".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["snack"]),
                 1,
                 Some(1),
@@ -1722,8 +1738,9 @@ mod tests {
         let item_group = ItemGroup::new(items, GBP);
 
         // Variable arity: min=2, no max
-        let slots = vec![MixAndMatchSlot::new(
-            "snack".to_string(),
+        let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
+        let slots = vec![slot(
+            &mut slot_keys,
             StringTagCollection::from_strs(&["snack"]),
             2,
             None,

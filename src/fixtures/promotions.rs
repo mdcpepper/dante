@@ -3,6 +3,7 @@
 use rustc_hash::FxHashMap;
 use rusty_money::Money;
 use serde::Deserialize;
+use slotmap::{SecondaryMap, SlotMap};
 
 use crate::{
     discounts::SimpleDiscount,
@@ -11,7 +12,7 @@ use crate::{
         products::{parse_percentage, parse_price},
     },
     promotions::{
-        Promotion, PromotionKey, PromotionMeta,
+        Promotion, PromotionKey, PromotionMeta, PromotionSlotKey,
         direct_discount::DirectDiscountPromotion,
         mix_and_match::{MixAndMatchDiscount, MixAndMatchPromotion, MixAndMatchSlot},
         positional_discount::PositionalDiscountPromotion,
@@ -89,7 +90,10 @@ impl PromotionFixture {
                 tags,
                 discount,
             } => {
-                let meta = PromotionMeta { name: name.clone() };
+                let meta = PromotionMeta {
+                    name: name.clone(),
+                    slot_names: SecondaryMap::new(),
+                };
                 let tag_refs: Vec<&str> = tags.iter().map(String::as_str).collect();
                 let promotion = Promotion::DirectDiscount(DirectDiscountPromotion::new(
                     key,
@@ -104,21 +108,36 @@ impl PromotionFixture {
                 slots,
                 discount,
             } => {
-                let meta = PromotionMeta { name: name.clone() };
+                let mut slot_names = SecondaryMap::new();
+                let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
 
                 let slot_defs = slots
                     .into_iter()
                     .map(|slot| {
-                        let tag_refs: Vec<&str> = slot.tags.iter().map(String::as_str).collect();
+                        let MixAndMatchSlotFixture {
+                            name,
+                            tags,
+                            min,
+                            max,
+                        } = slot;
+                        let tag_refs: Vec<&str> = tags.iter().map(String::as_str).collect();
+                        let slot_key = slot_keys.insert(());
+
+                        slot_names.insert(slot_key, name);
 
                         MixAndMatchSlot::new(
-                            slot.name,
+                            slot_key,
                             StringTagCollection::from_strs(&tag_refs),
-                            slot.min,
-                            slot.max,
+                            min,
+                            max,
                         )
                     })
                     .collect();
+
+                let meta = PromotionMeta {
+                    name: name.clone(),
+                    slot_names,
+                };
 
                 let promotion = Promotion::MixAndMatch(MixAndMatchPromotion::new(
                     key,
@@ -135,7 +154,10 @@ impl PromotionFixture {
                 positions,
                 discount,
             } => {
-                let meta = PromotionMeta { name: name.clone() };
+                let meta = PromotionMeta {
+                    name: name.clone(),
+                    slot_names: SecondaryMap::new(),
+                };
 
                 let tag_refs: Vec<&str> = tags.iter().map(String::as_str).collect();
 
@@ -480,6 +502,14 @@ value: 0.10
         match promotion {
             Promotion::MixAndMatch(promo) => {
                 assert_eq!(promo.slots().len(), 2);
+                assert_eq!(meta.slot_names.len(), 2);
+                let slot_names: Vec<&str> = promo
+                    .slots()
+                    .iter()
+                    .filter_map(|slot| meta.slot_names.get(*slot.key()).map(String::as_str))
+                    .collect();
+                assert!(slot_names.contains(&"main"));
+                assert!(slot_names.contains(&"drink"));
                 assert!(matches!(
                     promo.discount(),
                     MixAndMatchDiscount::FixedTotal(amount)

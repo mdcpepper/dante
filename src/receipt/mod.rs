@@ -587,6 +587,7 @@ mod tests {
 
         let promo_key = promotion_meta.insert(PromotionMeta {
             name: "Fruit Sale".to_string(),
+            ..Default::default()
         });
 
         let items = [
@@ -727,6 +728,7 @@ mod tests {
 
         let promo_key = promotion_meta.insert(PromotionMeta {
             name: "Half Off".to_string(),
+            ..Default::default()
         });
 
         let items = [Item::new(apple_key, apple_price)];
@@ -825,6 +827,7 @@ mod tests {
 
         let promo_key = promotion_meta.insert(PromotionMeta {
             name: "Meal Deal".to_string(),
+            ..Default::default()
         });
 
         let items = [

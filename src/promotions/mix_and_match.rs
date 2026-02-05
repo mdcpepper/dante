@@ -8,7 +8,7 @@ use decimal_percentage::Percentage;
 use rusty_money::{Money, iso::Currency};
 
 use crate::{
-    promotions::PromotionKey,
+    promotions::{PromotionKey, PromotionSlotKey},
     tags::{collection::TagCollection, string::StringTagCollection},
 };
 
@@ -31,8 +31,8 @@ pub enum MixAndMatchDiscount<'a> {
 /// Slot definition for a mix-and-match bundle.
 #[derive(Debug, Clone)]
 pub struct MixAndMatchSlot<T: TagCollection = StringTagCollection> {
-    /// Human-readable name for this slot (e.g. "main", "drink", "snack").
-    name: String,
+    /// Key for a human-readable name for this slot (e.g. "main", "drink", "snack").
+    key: PromotionSlotKey,
 
     /// Tags that match items to this slot (OR semantics).
     tags: T,
@@ -46,18 +46,18 @@ pub struct MixAndMatchSlot<T: TagCollection = StringTagCollection> {
 
 impl<T: TagCollection> MixAndMatchSlot<T> {
     /// Create a new slot.
-    pub fn new(name: String, tags: T, min: usize, max: Option<usize>) -> Self {
+    pub fn new(key: PromotionSlotKey, tags: T, min: usize, max: Option<usize>) -> Self {
         Self {
-            name,
+            key,
             tags,
             min,
             max,
         }
     }
 
-    /// Slot name.
-    pub fn name(&self) -> &str {
-        &self.name
+    /// Slot key.
+    pub fn key(&self) -> &PromotionSlotKey {
+        &self.key
     }
 
     /// Slot tags.
@@ -130,23 +130,25 @@ impl<'a, T: TagCollection> MixAndMatchPromotion<'a, T> {
 mod tests {
     use decimal_percentage::Percentage;
     use rusty_money::{Money, iso::GBP};
+    use slotmap::SlotMap;
 
-    use crate::tags::string::StringTagCollection;
+    use crate::{tags::string::StringTagCollection, utils::slot};
 
     use super::*;
 
     #[test]
     fn accessors_return_constructor_values() {
         let key = PromotionKey::default();
+        let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
         let slots = vec![
-            MixAndMatchSlot::new(
-                "main".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["main"]),
                 1,
                 Some(1),
             ),
-            MixAndMatchSlot::new(
-                "drink".to_string(),
+            slot(
+                &mut slot_keys,
                 StringTagCollection::from_strs(&["drink"]),
                 1,
                 Some(1),
@@ -170,14 +172,16 @@ mod tests {
 
     #[test]
     fn slot_accessors_return_expected_values() {
+        let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
+        let slot_key = slot_keys.insert(());
         let slot = MixAndMatchSlot::new(
-            "test-slot".to_string(),
+            slot_key,
             StringTagCollection::from_strs(&["tag1", "tag2"]),
             3,
             Some(5),
         );
 
-        assert_eq!(slot.name(), "test-slot");
+        assert_eq!(slot.key(), &slot_key);
         let tags = slot.tags().to_strs();
         assert_eq!(tags.len(), 2);
         assert!(tags.iter().any(|t| t == "tag1"));
