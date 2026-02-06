@@ -10,11 +10,11 @@ use rusty_money::Money;
 
 use crate::{
     discounts::percent_of_minor,
-    items::groups::ItemGroup,
+    items::{Item, groups::ItemGroup},
     promotions::{
         PromotionKey,
         applications::PromotionApplication,
-        mix_and_match::{MixAndMatchDiscount, MixAndMatchPromotion},
+        types::{MixAndMatchDiscount, MixAndMatchPromotion},
     },
     solvers::{
         SolverError,
@@ -255,6 +255,106 @@ impl MixAndMatchVars {
         model
     }
 
+    /// Add budget constraints for mix-and-match promotions
+    pub fn add_budget_constraints<S, O: ILPObserver + ?Sized>(
+        &self,
+        model: S,
+        promotion: &MixAndMatchPromotion<'_>,
+        item_group: &ItemGroup<'_>,
+        promotion_key: PromotionKey,
+        observer: &mut O,
+    ) -> Result<S, SolverError>
+    where
+        S: SolverModel,
+    {
+        let mut model = model;
+        let budget = promotion.budget();
+
+        // Application limit: For mix-and-match, this limits bundles
+        if let Some(application_limit) = budget.application_limit {
+            // Use bundle counter variable if available
+            if let Some(y_bundle) = self.y_bundle {
+                let limit_f64 = i64_to_f64_exact(i64::from(application_limit)).ok_or(
+                    SolverError::MinorUnitsNotRepresentable(i64::from(application_limit)),
+                )?;
+
+                let expr = Expression::from(y_bundle);
+
+                observer.on_promotion_constraint(
+                    promotion_key,
+                    "application count budget (bundle limit)",
+                    &expr,
+                    "<=",
+                    limit_f64,
+                );
+
+                model = model.with(expr.leq(limit_f64));
+            } else if let Some(bundle_formed) = self.bundle_formed {
+                // Variable-arity bundles: bundle_formed is binary (0 or 1)
+                // application_limit only makes sense if >= 1
+                if application_limit == 0 {
+                    let expr = Expression::from(bundle_formed);
+
+                    observer.on_promotion_constraint(
+                        promotion_key,
+                        "application count budget (no bundles)",
+                        &expr,
+                        "=",
+                        0.0,
+                    );
+
+                    model = model.with(expr.eq(0));
+                }
+                // If application_limit >= 1, no constraint needed (bundle_formed is already <= 1)
+            }
+        }
+
+        // Monetary limit: sum(discount_amount * participation_var) <= limit
+        if let Some(monetary_limit) = budget.monetary_limit {
+            let mut discount_expr = Expression::default();
+
+            // Iterate over all slot variables to compute total discount
+            for slot in &self.slot_vars {
+                for &(item_idx, var) in slot {
+                    let item = item_group.get_item(item_idx).map_err(SolverError::from)?;
+
+                    let full_minor = item.price().to_minor_units();
+
+                    // Calculate discounted price based on discount type
+                    let discounted_minor = calculate_discounted_price_for_item(
+                        item,
+                        promotion.discount(),
+                        item_group,
+                        &self.sorted_items,
+                    )?
+                    .to_minor_units();
+
+                    let discount_amount = full_minor.saturating_sub(discounted_minor);
+                    let coeff = i64_to_f64_exact(discount_amount)
+                        .ok_or(SolverError::MinorUnitsNotRepresentable(discount_amount))?;
+
+                    discount_expr += var * coeff;
+                }
+            }
+
+            let limit_minor = monetary_limit.to_minor_units();
+            let limit_f64 = i64_to_f64_exact(limit_minor)
+                .ok_or(SolverError::MinorUnitsNotRepresentable(limit_minor))?;
+
+            observer.on_promotion_constraint(
+                promotion_key,
+                "monetary value budget",
+                &discount_expr,
+                "<=",
+                limit_f64,
+            );
+
+            model = model.with(discount_expr.leq(limit_f64));
+        }
+
+        Ok(model)
+    }
+
     fn bundle_count(&self, solution: &dyn Solution) -> usize {
         if let Some(y_bundle) = self.y_bundle {
             let count = solution.value(y_bundle).round();
@@ -276,6 +376,49 @@ fn discounted_minor_percent(pct: &Percentage, original_minor: i64) -> Result<i64
 
 fn i32_from_usize(value: usize) -> i32 {
     i32::try_from(value).unwrap_or(i32::MAX)
+}
+
+/// Calculate discounted price for a single item in mix-and-match context
+fn calculate_discounted_price_for_item<'a>(
+    item: &Item<'_>,
+    discount: &MixAndMatchDiscount<'_>,
+    item_group: &ItemGroup<'a>,
+    _sorted_items: &[(usize, i64)],
+) -> Result<Money<'a, rusty_money::iso::Currency>, SolverError> {
+    let full_minor = item.price().to_minor_units();
+
+    let discounted_minor = match discount {
+        MixAndMatchDiscount::PercentAllItems(pct) => {
+            let discount_amount =
+                percent_of_minor(pct, full_minor).map_err(SolverError::Discount)?;
+
+            full_minor.saturating_sub(discount_amount)
+        }
+        MixAndMatchDiscount::PercentCheapest(pct) => {
+            // For cheapest-only discounts, worst case is full discount on this item
+            // For budget calculation purposes, assume it could be the cheapest
+            // This is conservative but ensures budget isn't violated
+            let discount_amount =
+                percent_of_minor(pct, full_minor).map_err(SolverError::Discount)?;
+
+            full_minor.saturating_sub(discount_amount)
+        }
+        MixAndMatchDiscount::FixedTotal(_total) => {
+            // For fixed total, distribute evenly across bundle
+            // Conservative approximation: assume zero price (max discount)
+            0
+        }
+        MixAndMatchDiscount::FixedCheapest(fixed_price) => {
+            // Cheapest item gets fixed price, others full price
+            // Conservative: assume this item could be cheapest
+            fixed_price.to_minor_units()
+        }
+    };
+
+    Ok(Money::from_minor(
+        discounted_minor.max(0),
+        item_group.currency(),
+    ))
 }
 
 fn proportional_alloc(total: i64, part: i64, denom: i64) -> i64 {
@@ -709,14 +852,14 @@ impl ILPPromotion for MixAndMatchPromotion<'_> {
         calculate_discounts_for_vars(self, solution, vars, item_group)
     }
 
-    fn calculate_item_applications<'group>(
+    fn calculate_item_applications<'a>(
         &self,
         promotion_key: PromotionKey,
         solution: &dyn Solution,
         vars: &PromotionVars,
-        item_group: &'group ItemGroup<'_>,
+        item_group: &'a ItemGroup<'_>,
         next_bundle_id: &mut usize,
-    ) -> Result<SmallVec<[PromotionApplication<'group>; 10]>, SolverError> {
+    ) -> Result<SmallVec<[PromotionApplication<'a>; 10]>, SolverError> {
         let vars = match vars {
             PromotionVars::MixAndMatch(vars) => vars.as_ref(),
             _ => return Ok(SmallVec::new()),
@@ -775,7 +918,7 @@ mod tests {
     use crate::{
         items::{Item, groups::ItemGroup},
         products::ProductKey,
-        promotions::{PromotionKey, PromotionSlotKey},
+        promotions::{PromotionKey, PromotionSlotKey, budget::PromotionBudget},
         solvers::ilp::{NoopObserver, state::ILPState},
         tags::string::StringTagCollection,
         utils::slot,
@@ -835,6 +978,7 @@ mod tests {
             PromotionKey::default(),
             slots,
             MixAndMatchDiscount::PercentAllItems(Percentage::from(0.1)),
+            PromotionBudget::unlimited(),
         );
 
         assert!(!promo.is_applicable(&item_group));
@@ -876,6 +1020,7 @@ mod tests {
             PromotionKey::default(),
             slots,
             MixAndMatchDiscount::FixedTotal(Money::from_minor(120, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         let mut state = ILPState::with_presence_variables(&item_group)?;
@@ -929,6 +1074,7 @@ mod tests {
             PromotionKey::default(),
             slots,
             MixAndMatchDiscount::FixedTotal(Money::from_minor(150, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         let mut state = ILPState::with_presence_variables(&item_group)?;
@@ -1000,6 +1146,7 @@ mod tests {
             PromotionKey::default(),
             slots,
             MixAndMatchDiscount::PercentAllItems(Percentage::from(0.25)),
+            PromotionBudget::unlimited(),
         );
 
         let mut state = ILPState::with_presence_variables(&item_group)?;
@@ -1076,6 +1223,7 @@ mod tests {
             PromotionKey::default(),
             slots,
             MixAndMatchDiscount::PercentCheapest(Percentage::from(0.50)),
+            PromotionBudget::unlimited(),
         );
 
         let mut state = ILPState::with_presence_variables(&item_group)?;
@@ -1157,6 +1305,7 @@ mod tests {
             PromotionKey::default(),
             slots,
             MixAndMatchDiscount::FixedCheapest(Money::from_minor(50, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         let mut state = ILPState::with_presence_variables(&item_group)?;
@@ -1237,6 +1386,7 @@ mod tests {
             PromotionKey::default(),
             slots,
             MixAndMatchDiscount::PercentAllItems(Percentage::from(0.25)),
+            PromotionBudget::unlimited(),
         );
 
         assert!(!promo.has_fixed_arity());
@@ -1292,6 +1442,7 @@ mod tests {
             PromotionKey::default(),
             slots,
             MixAndMatchDiscount::FixedTotal(Money::from_minor(150, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         let mut state = ILPState::with_presence_variables(&item_group)?;
@@ -1380,6 +1531,7 @@ mod tests {
             PromotionKey::default(),
             slots,
             MixAndMatchDiscount::FixedTotal(Money::from_minor(120, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         let mut state = ILPState::with_presence_variables(&item_group)?;
@@ -1438,6 +1590,7 @@ mod tests {
             PromotionKey::default(),
             slots,
             MixAndMatchDiscount::PercentAllItems(Percentage::from(0.25)),
+            PromotionBudget::unlimited(),
         );
 
         assert!(!promo.is_applicable(&item_group));
@@ -1486,6 +1639,7 @@ mod tests {
             PromotionKey::default(),
             slots,
             MixAndMatchDiscount::PercentAllItems(Percentage::from(0.25)),
+            PromotionBudget::unlimited(),
         );
 
         assert!(!promo.is_applicable(&item_group));
@@ -1539,6 +1693,7 @@ mod tests {
             PromotionKey::default(),
             slots,
             MixAndMatchDiscount::PercentCheapest(Percentage::from(0.50)),
+            PromotionBudget::unlimited(),
         );
 
         let mut state = ILPState::with_presence_variables(&item_group)?;
@@ -1604,6 +1759,7 @@ mod tests {
             PromotionKey::default(),
             slots,
             MixAndMatchDiscount::PercentAllItems(Percentage::from(0.25)),
+            PromotionBudget::unlimited(),
         );
 
         let mut state = ILPState::with_presence_variables(&item_group)?;
@@ -1695,6 +1851,7 @@ mod tests {
             PromotionKey::default(),
             slots,
             MixAndMatchDiscount::PercentCheapest(Percentage::from(1.0)), // 100% off cheapest
+            PromotionBudget::unlimited(),
         );
 
         let mut state = ILPState::with_presence_variables(&item_group)?;
@@ -1750,6 +1907,7 @@ mod tests {
             PromotionKey::default(),
             slots,
             MixAndMatchDiscount::PercentAllItems(Percentage::from(0.5)), // 50% off all
+            PromotionBudget::unlimited(),
         );
 
         let mut state = ILPState::with_presence_variables(&item_group)?;

@@ -4,7 +4,7 @@ use clap::Parser;
 use slotmap::SlotMap;
 
 use crate::{
-    promotions::{PromotionSlotKey, mix_and_match::MixAndMatchSlot},
+    promotions::{PromotionSlotKey, types::MixAndMatchSlot},
     tags::string::StringTagCollection,
 };
 

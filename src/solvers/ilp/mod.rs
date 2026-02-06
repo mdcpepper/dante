@@ -74,11 +74,11 @@ impl ILPSolver {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn solve_with_observer<'group>(
+    pub fn solve_with_observer<'a>(
         promotions: &[Promotion<'_>],
-        item_group: &'group ItemGroup<'_>,
+        item_group: &'a ItemGroup<'_>,
         observer: &mut dyn ILPObserver,
-    ) -> Result<SolverResult<'group>, SolverError> {
+    ) -> Result<SolverResult<'a>, SolverError> {
         Self::solve_internal(promotions, item_group, observer)
     }
 
@@ -143,7 +143,7 @@ impl ILPSolver {
         }
 
         // Add constraints for all promotions
-        model = promotion_instances.add_constraints(model, item_group, observer);
+        model = promotion_instances.add_constraints(model, item_group, observer)?;
 
         let solution = model.solve()?;
 
@@ -252,13 +252,13 @@ fn build_presence_variables_and_objective<O: ILPObserver + ?Sized>(
 ///
 /// Returns a [`SolverError`] if any item in the group contains a Money amount in minor units
 /// that cannot be represented exactly as a solver coefficient.
-fn collect_full_price_items<'group>(
-    item_group: &'group ItemGroup<'_>,
+fn collect_full_price_items<'a>(
+    item_group: &'a ItemGroup<'_>,
     solution: &impl Solution,
     z: &[Variable],
     used_items: ItemUsageFlags,
-    total: Money<'group, Currency>,
-) -> Result<FullPriceState<'group>, SolverError> {
+    total: Money<'a, Currency>,
+) -> Result<FullPriceState<'a>, SolverError> {
     let mut unaffected_items = SmallVec::new();
     let mut used_items = used_items;
     let mut total = total;
@@ -362,8 +362,8 @@ mod tests {
         items::{Item, groups::ItemGroup},
         products::ProductKey,
         promotions::{
-            Promotion, PromotionKey, applications::PromotionApplication,
-            direct_discount::DirectDiscountPromotion,
+            Promotion, PromotionKey, applications::PromotionApplication, budget::PromotionBudget,
+            types::DirectDiscountPromotion,
         },
         tags::{collection::TagCollection, string::StringTagCollection},
     };
@@ -489,6 +489,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::from_strs(&["a"]),
             SimpleDiscount::PercentageOff(Percentage::from(0.25)),
+            PromotionBudget::unlimited(),
         ))];
 
         let result = ILPSolver::solve(&promotions, &item_group)?;
@@ -515,6 +516,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOverride(Money::from_minor(50, GBP)),
+            PromotionBudget::unlimited(),
         ))];
 
         let result = ILPSolver::solve(&promotions, &item_group)?;
@@ -539,6 +541,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::from_strs(&["missing"]),
             SimpleDiscount::PercentageOff(Percentage::from(0.25)),
+            PromotionBudget::unlimited(),
         ))];
 
         let result = ILPSolver::solve(&promotions, &item_group)?;
@@ -562,6 +565,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOverride(Money::from_minor(400, GBP)),
+            PromotionBudget::unlimited(),
         ))];
 
         let result = ILPSolver::solve(&promotions, &item_group)?;
@@ -585,6 +589,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::from_strs(&["a"]),
             SimpleDiscount::AmountOverride(Money::from_minor(50, GBP)),
+            PromotionBudget::unlimited(),
         ))];
 
         let result = ILPSolver::solve(&promotions, &item_group)?;
@@ -747,6 +752,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::from_strs(&["a"]),
             SimpleDiscount::PercentageOff(Percentage::from(0.25)),
+            PromotionBudget::unlimited(),
         ))];
 
         // Solve using trait method
@@ -833,6 +839,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::from_strs(&["a"]),
             SimpleDiscount::PercentageOff(Percentage::from(0.25)),
+            PromotionBudget::unlimited(),
         ))];
 
         let mut observer = MockObserver::default();
@@ -912,6 +919,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::from_strs(&["a"]),
             SimpleDiscount::AmountOverride(Money::from_minor(50, GBP)),
+            PromotionBudget::unlimited(),
         ))];
 
         // Solve without observer

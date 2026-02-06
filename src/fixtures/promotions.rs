@@ -13,9 +13,11 @@ use crate::{
     },
     promotions::{
         Promotion, PromotionKey, PromotionMeta, PromotionSlotKey,
-        direct_discount::DirectDiscountPromotion,
-        mix_and_match::{MixAndMatchDiscount, MixAndMatchPromotion, MixAndMatchSlot},
-        positional_discount::PositionalDiscountPromotion,
+        budget::PromotionBudget,
+        types::{
+            DirectDiscountPromotion, MixAndMatchDiscount, MixAndMatchPromotion, MixAndMatchSlot,
+            PositionalDiscountPromotion,
+        },
     },
     tags::string::StringTagCollection,
 };
@@ -25,6 +27,33 @@ use crate::{
 pub struct PromotionsFixture {
     /// Map of promotion key -> promotion fixture
     pub promotions: FxHashMap<String, PromotionFixture>,
+}
+
+/// Budget constraint fixture
+#[derive(Debug, Deserialize)]
+pub struct BudgetFixture {
+    /// Maximum applications (items or bundles)
+    pub applications: Option<u32>,
+
+    /// Maximum monetary discount value (e.g., "10.00 GBP")
+    pub monetary: Option<String>,
+}
+
+impl BudgetFixture {
+    fn try_into_budget(self) -> Result<PromotionBudget<'static>, FixtureError> {
+        let monetary = if let Some(amount_str) = self.monetary {
+            let (minor, currency) = parse_price(&amount_str)?;
+
+            Some(Money::from_minor(minor, currency))
+        } else {
+            None
+        };
+
+        Ok(PromotionBudget {
+            application_limit: self.applications,
+            monetary_limit: monetary,
+        })
+    }
 }
 
 /// Promotion fixture from YAML
@@ -41,6 +70,10 @@ pub enum PromotionFixture {
 
         /// Discount configuration
         discount: SimpleDiscountFixture,
+
+        /// Budget constraints (optional)
+        #[serde(default)]
+        budget: Option<BudgetFixture>,
     },
 
     /// Mix-and-Match Bundle Promotion
@@ -53,6 +86,10 @@ pub enum PromotionFixture {
 
         /// Discount configuration
         discount: MixAndMatchDiscountFixture,
+
+        /// Budget constraints (optional)
+        #[serde(default)]
+        budget: Option<BudgetFixture>,
     },
 
     /// Positional Discount Promotion
@@ -71,6 +108,10 @@ pub enum PromotionFixture {
 
         /// Discount configuration
         discount: SimpleDiscountFixture,
+
+        /// Budget constraints (optional)
+        #[serde(default)]
+        budget: Option<BudgetFixture>,
     },
 }
 
@@ -89,16 +130,23 @@ impl PromotionFixture {
                 name,
                 tags,
                 discount,
+                budget,
             } => {
                 let meta = PromotionMeta {
                     name: name.clone(),
                     slot_names: SecondaryMap::new(),
                 };
                 let tag_refs: Vec<&str> = tags.iter().map(String::as_str).collect();
+                let budget = budget
+                    .map(BudgetFixture::try_into_budget)
+                    .transpose()?
+                    .unwrap_or_else(PromotionBudget::unlimited);
+
                 let promotion = Promotion::DirectDiscount(DirectDiscountPromotion::new(
                     key,
                     StringTagCollection::from_strs(&tag_refs),
                     SimpleDiscount::try_from(discount)?,
+                    budget,
                 ));
 
                 Ok((meta, promotion))
@@ -107,6 +155,7 @@ impl PromotionFixture {
                 name,
                 slots,
                 discount,
+                budget,
             } => {
                 let mut slot_names = SecondaryMap::new();
                 let mut slot_keys = SlotMap::<PromotionSlotKey, ()>::with_key();
@@ -139,10 +188,16 @@ impl PromotionFixture {
                     slot_names,
                 };
 
+                let budget = budget
+                    .map(BudgetFixture::try_into_budget)
+                    .transpose()?
+                    .unwrap_or_else(PromotionBudget::unlimited);
+
                 let promotion = Promotion::MixAndMatch(MixAndMatchPromotion::new(
                     key,
                     slot_defs,
                     MixAndMatchDiscount::try_from(discount)?,
+                    budget,
                 ));
 
                 Ok((meta, promotion))
@@ -153,6 +208,7 @@ impl PromotionFixture {
                 size,
                 positions,
                 discount,
+                budget,
             } => {
                 let meta = PromotionMeta {
                     name: name.clone(),
@@ -161,12 +217,18 @@ impl PromotionFixture {
 
                 let tag_refs: Vec<&str> = tags.iter().map(String::as_str).collect();
 
+                let budget = budget
+                    .map(BudgetFixture::try_into_budget)
+                    .transpose()?
+                    .unwrap_or_else(PromotionBudget::unlimited);
+
                 let promotion = Promotion::PositionalDiscount(PositionalDiscountPromotion::new(
                     key,
                     StringTagCollection::from_strs(&tag_refs),
                     size,
                     positions.into(),
                     SimpleDiscount::try_from(discount)?,
+                    budget,
                 ));
 
                 Ok((meta, promotion))
@@ -419,6 +481,7 @@ value: 0.10
             discount: SimpleDiscountFixture::AmountOff {
                 amount: "0.50 GBP".to_string(),
             },
+            budget: None,
         };
 
         let (meta, promotion) = fixture.try_into_promotion(PromotionKey::default())?;
@@ -451,6 +514,7 @@ value: 0.10
             discount: SimpleDiscountFixture::PercentageOff {
                 amount: "50%".to_string(),
             },
+            budget: None,
         };
 
         let (meta, promotion) = fixture.try_into_promotion(PromotionKey::default())?;
@@ -493,6 +557,7 @@ value: 0.10
             discount: MixAndMatchDiscountFixture::FixedTotal {
                 amount: "2.50 GBP".to_string(),
             },
+            budget: None,
         };
 
         let (meta, promotion) = fixture.try_into_promotion(PromotionKey::default())?;
@@ -569,6 +634,125 @@ value: 0.10
             MixAndMatchDiscount::FixedCheapest(amount)
                 if amount.to_minor_units() == 99 && amount.currency() == GBP
         ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn budget_fixture_parses_application_limit() -> Result<(), FixtureError> {
+        let budget_fixture = BudgetFixture {
+            applications: Some(5),
+            monetary: None,
+        };
+
+        let budget = budget_fixture.try_into_budget()?;
+
+        assert_eq!(budget.application_limit, Some(5));
+        assert!(budget.monetary_limit.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn budget_fixture_parses_monetary_limit() -> Result<(), FixtureError> {
+        let budget_fixture = BudgetFixture {
+            applications: None,
+            monetary: Some("2.50 GBP".to_string()),
+        };
+
+        let budget = budget_fixture.try_into_budget()?;
+
+        assert!(budget.application_limit.is_none());
+        assert_eq!(budget.monetary_limit, Some(Money::from_minor(250, GBP)));
+
+        Ok(())
+    }
+
+    #[test]
+    fn budget_fixture_parses_both_limits() -> Result<(), FixtureError> {
+        let budget_fixture = BudgetFixture {
+            applications: Some(10),
+            monetary: Some("5.00 GBP".to_string()),
+        };
+
+        let budget = budget_fixture.try_into_budget()?;
+
+        assert_eq!(budget.application_limit, Some(10));
+        assert_eq!(budget.monetary_limit, Some(Money::from_minor(500, GBP)));
+
+        Ok(())
+    }
+
+    #[test]
+    fn budget_fixture_parses_neither_limit() -> Result<(), FixtureError> {
+        let budget_fixture = BudgetFixture {
+            applications: None,
+            monetary: None,
+        };
+
+        let budget = budget_fixture.try_into_budget()?;
+
+        assert!(budget.application_limit.is_none());
+        assert!(budget.monetary_limit.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn promotion_fixture_direct_discount_with_budget() -> TestResult {
+        let fixture = PromotionFixture::DirectDiscount {
+            name: "Sale with Budget".to_string(),
+            tags: vec!["item".to_string()],
+            discount: SimpleDiscountFixture::PercentageOff {
+                amount: "25%".to_string(),
+            },
+            budget: Some(BudgetFixture {
+                applications: Some(3),
+                monetary: Some("1.00 GBP".to_string()),
+            }),
+        };
+
+        let (_meta, promotion) = fixture.try_into_promotion(PromotionKey::default())?;
+
+        match promotion {
+            Promotion::DirectDiscount(ref promo) => {
+                assert_eq!(promo.budget().application_limit, Some(3));
+                assert_eq!(
+                    promo.budget().monetary_limit,
+                    Some(Money::from_minor(100, GBP))
+                );
+            }
+            _ => panic!("Expected DirectDiscount promotion"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn promotion_fixture_positional_discount_with_budget() -> TestResult {
+        let fixture = PromotionFixture::PositionalDiscount {
+            name: "BOGOF Limited".to_string(),
+            tags: vec!["snack".to_string()],
+            size: 2,
+            positions: vec![1],
+            discount: SimpleDiscountFixture::PercentageOff {
+                amount: "100%".to_string(),
+            },
+            budget: Some(BudgetFixture {
+                applications: Some(5),
+                monetary: None,
+            }),
+        };
+
+        let (_meta, promotion) = fixture.try_into_promotion(PromotionKey::default())?;
+
+        match promotion {
+            Promotion::PositionalDiscount(ref promo) => {
+                assert_eq!(promo.budget().application_limit, Some(5));
+                assert!(promo.budget().monetary_limit.is_none());
+            }
+            _ => panic!("Expected PositionalDiscount promotion"),
+        }
 
         Ok(())
     }

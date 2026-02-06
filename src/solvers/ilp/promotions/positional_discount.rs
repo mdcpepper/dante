@@ -10,8 +10,7 @@ use crate::{
     discounts::{SimpleDiscount, percent_of_minor},
     items::{Item, groups::ItemGroup},
     promotions::{
-        PromotionKey, applications::PromotionApplication,
-        positional_discount::PositionalDiscountPromotion,
+        PromotionKey, applications::PromotionApplication, types::PositionalDiscountPromotion,
     },
     solvers::{
         SolverError,
@@ -323,6 +322,90 @@ impl PositionalDiscountVars {
 
         model
     }
+
+    /// Add budget constraints for positional promotions
+    pub fn add_budget_constraints<S, O: ILPObserver + ?Sized>(
+        &self,
+        model: S,
+        promotion: &PositionalDiscountPromotion<'_>,
+        item_group: &ItemGroup<'_>,
+        promotion_key: PromotionKey,
+        observer: &mut O,
+    ) -> Result<S, SolverError>
+    where
+        S: SolverModel,
+    {
+        let mut model = model;
+        let budget = promotion.budget();
+        let bundle_size = promotion.size() as usize;
+
+        // Application limit: For positional, this limits bundles
+        // Constraint: sum(participation_vars) <= application_limit * bundle_size
+        if let Some(application_limit) = budget.application_limit {
+            let participation_sum: Expression =
+                self.item_participation.iter().map(|(_, var)| *var).sum();
+
+            let bundle_size_u32 =
+                u32::try_from(bundle_size).map_err(|_e| SolverError::InvariantViolation {
+                    message: "bundle size too large",
+                })?;
+
+            let max_items = i64::from(application_limit)
+                .checked_mul(i64::from(bundle_size_u32))
+                .ok_or(SolverError::InvariantViolation {
+                    message: "application limit overflow",
+                })?;
+
+            let limit_f64 = i64_to_f64_exact(max_items)
+                .ok_or(SolverError::MinorUnitsNotRepresentable(max_items))?;
+
+            observer.on_promotion_constraint(
+                promotion_key,
+                "application count budget (bundle limit)",
+                &participation_sum,
+                "<=",
+                limit_f64,
+            );
+
+            model = model.with(participation_sum.leq(limit_f64));
+        }
+
+        // Monetary limit: sum(discount_amount * discount_var) <= limit
+        if let Some(monetary_limit) = budget.monetary_limit {
+            let mut discount_expr = Expression::default();
+
+            for &(item_idx, discount_var) in &self.item_discounts {
+                let item = item_group.get_item(item_idx).map_err(SolverError::from)?;
+
+                let full_minor = item.price().to_minor_units();
+                let discounted_minor =
+                    calculate_discounted_price(item, promotion.discount(), item_group.currency())?
+                        .to_minor_units();
+
+                let discount_amount = full_minor.saturating_sub(discounted_minor);
+                let coeff = i64_to_f64_exact(discount_amount)
+                    .ok_or(SolverError::MinorUnitsNotRepresentable(discount_amount))?;
+
+                discount_expr += discount_var * coeff;
+            }
+
+            let limit_minor = monetary_limit.to_minor_units();
+            let limit_f64 = i64_to_f64_exact(limit_minor)
+                .ok_or(SolverError::MinorUnitsNotRepresentable(limit_minor))?;
+
+            observer.on_promotion_constraint(
+                promotion_key,
+                "monetary value budget",
+                &discount_expr,
+                "<=",
+                limit_f64,
+            );
+
+            model = model.with(discount_expr.leq(limit_f64));
+        }
+
+        Ok(model)
+    }
 }
 
 /// Calculate the discounted price based on the discount type.
@@ -580,14 +663,14 @@ impl ILPPromotion for PositionalDiscountPromotion<'_> {
         Ok(discounts)
     }
 
-    fn calculate_item_applications<'group>(
+    fn calculate_item_applications<'a>(
         &self,
         promotion_key: PromotionKey,
         solution: &dyn Solution,
         vars: &PromotionVars,
-        item_group: &'group ItemGroup<'_>,
+        item_group: &'a ItemGroup<'_>,
         next_bundle_id: &mut usize,
-    ) -> Result<SmallVec<[PromotionApplication<'group>; 10]>, SolverError> {
+    ) -> Result<SmallVec<[PromotionApplication<'a>; 10]>, SolverError> {
         let mut applications = SmallVec::new();
 
         let currency = item_group.currency();
@@ -652,7 +735,7 @@ mod tests {
         discounts::SimpleDiscount,
         items::{Item, groups::ItemGroup},
         products::ProductKey,
-        promotions::PromotionKey,
+        promotions::{PromotionKey, budget::PromotionBudget},
         solvers::ilp::{NoopObserver, state::ILPState},
         tags::string::StringTagCollection,
     };
@@ -744,6 +827,7 @@ mod tests {
             2,
             SmallVec::from_vec(vec![1u16]),
             SimpleDiscount::PercentageOff(Percentage::from(0.5)),
+            PromotionBudget::unlimited(),
         );
 
         assert!(!promo.is_applicable(&empty_group));
@@ -764,6 +848,7 @@ mod tests {
             2,
             SmallVec::from_vec(vec![1u16]),
             SimpleDiscount::PercentageOff(Percentage::from(0.5)),
+            PromotionBudget::unlimited(),
         );
 
         assert!(match_all.is_applicable(&item_group));
@@ -779,6 +864,7 @@ mod tests {
             3,
             SmallVec::from_vec(vec![2]),
             SimpleDiscount::PercentageOff(Percentage::from(0.5)),
+            PromotionBudget::unlimited(),
         );
 
         let pb = good_lp::ProblemVariables::new();
@@ -808,6 +894,7 @@ mod tests {
             2,
             SmallVec::from_vec(vec![1]),
             SimpleDiscount::PercentageOff(Percentage::from(0.5)),
+            PromotionBudget::unlimited(),
         );
 
         let pb = good_lp::ProblemVariables::new();
@@ -836,6 +923,7 @@ mod tests {
             3,
             SmallVec::from_vec(vec![2]),
             SimpleDiscount::PercentageOff(Percentage::from(0.5)),
+            PromotionBudget::unlimited(),
         );
 
         let pb = good_lp::ProblemVariables::new();
@@ -1028,6 +1116,7 @@ mod tests {
             1,
             SmallVec::from_vec(vec![0]),
             SimpleDiscount::PercentageOff(Percentage::from(0.5)),
+            PromotionBudget::unlimited(),
         );
 
         let pb = good_lp::ProblemVariables::new();
@@ -1068,6 +1157,7 @@ mod tests {
             1,
             SmallVec::from_vec(vec![0]),
             SimpleDiscount::PercentageOff(Percentage::from(0.5)),
+            PromotionBudget::unlimited(),
         );
 
         let mut state = ILPState::with_presence_variables(&item_group)?;
@@ -1093,6 +1183,7 @@ mod tests {
             2,
             SmallVec::from_vec(vec![1]),
             SimpleDiscount::PercentageOff(Percentage::from(0.5)),
+            PromotionBudget::unlimited(),
         );
 
         let mut state = ILPState::with_presence_variables(&item_group)?;
@@ -1129,6 +1220,7 @@ mod tests {
             2,
             SmallVec::from_vec(vec![1]),
             SimpleDiscount::PercentageOff(Percentage::from(0.5)),
+            PromotionBudget::unlimited(),
         );
 
         let mut state = ILPState::with_presence_variables(&item_group)?;
@@ -1162,6 +1254,7 @@ mod tests {
             2,
             SmallVec::from_vec(vec![1]),
             SimpleDiscount::PercentageOff(Percentage::from(0.5)),
+            PromotionBudget::unlimited(),
         );
 
         let mut state = ILPState::with_presence_variables(&item_group)?;
@@ -1205,6 +1298,7 @@ mod tests {
             2,
             SmallVec::from_vec(vec![1]),
             SimpleDiscount::PercentageOff(Percentage::from(0.5)),
+            PromotionBudget::unlimited(),
         );
 
         let mut state = ILPState::with_presence_variables(&item_group)?;
@@ -1253,6 +1347,7 @@ mod tests {
             2,
             SmallVec::from_vec(vec![1]),
             SimpleDiscount::PercentageOff(Percentage::from(0.5)),
+            PromotionBudget::unlimited(),
         );
 
         let mut state = ILPState::with_presence_variables(&item_group)?;

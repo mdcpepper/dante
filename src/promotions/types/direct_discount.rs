@@ -5,7 +5,7 @@
 use crate::{
     discounts::{DiscountError, SimpleDiscount, percent_of_minor},
     items::Item,
-    promotions::PromotionKey,
+    promotions::{PromotionKey, budget::PromotionBudget},
     tags::{collection::TagCollection, string::StringTagCollection},
 };
 use rusty_money::{Money, iso::Currency};
@@ -16,15 +16,22 @@ pub struct DirectDiscountPromotion<'a, T: TagCollection = StringTagCollection> {
     key: PromotionKey,
     tags: T,
     discount: SimpleDiscount<'a>,
+    budget: PromotionBudget<'a>,
 }
 
 impl<'a, T: TagCollection> DirectDiscountPromotion<'a, T> {
     /// Create a new direct discount promotion.
-    pub fn new(key: PromotionKey, tags: T, discount: SimpleDiscount<'a>) -> Self {
+    pub fn new(
+        key: PromotionKey,
+        tags: T,
+        discount: SimpleDiscount<'a>,
+        budget: PromotionBudget<'a>,
+    ) -> Self {
         Self {
             key,
             tags,
             discount,
+            budget,
         }
     }
 
@@ -41,6 +48,11 @@ impl<'a, T: TagCollection> DirectDiscountPromotion<'a, T> {
     /// Return the discount
     pub fn discount(&self) -> &SimpleDiscount<'a> {
         &self.discount
+    }
+
+    /// Return the budget
+    pub const fn budget(&self) -> &PromotionBudget<'a> {
+        &self.budget
     }
 
     /// Calculate the discounted price for a single item.
@@ -100,6 +112,7 @@ mod tests {
             key,
             StringTagCollection::empty(),
             SimpleDiscount::AmountOverride(Money::from_minor(0, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         assert_eq!(promo.key(), key);
@@ -112,6 +125,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::PercentageOff(Percentage::from(0.25)),
+            PromotionBudget::unlimited(),
         );
 
         let item = Item::new(ProductKey::default(), Money::from_minor(100, GBP));
@@ -128,6 +142,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOverride(Money::from_minor(50, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         let item = Item::new(ProductKey::default(), Money::from_minor(100, GBP));
@@ -144,6 +159,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOff(Money::from_minor(25, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         let item = Item::new(ProductKey::default(), Money::from_minor(100, GBP));
@@ -160,6 +176,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::PercentageOff(Percentage::from(2.0)),
+            PromotionBudget::unlimited(),
         );
 
         let item = Item::new(ProductKey::default(), Money::from_minor(100, GBP));
@@ -176,6 +193,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOff(Money::from_minor(200, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         let item = Item::new(ProductKey::default(), Money::from_minor(100, GBP));
@@ -192,6 +210,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOverride(Money::from_minor(-50, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         let item = Item::new(ProductKey::default(), Money::from_minor(100, GBP));
@@ -207,7 +226,12 @@ mod tests {
         let tags = StringTagCollection::from_strs(&["member", "sale"]);
         let discount = SimpleDiscount::AmountOff(Money::from_minor(10, GBP));
 
-        let promo = DirectDiscountPromotion::new(PromotionKey::default(), tags.clone(), discount);
+        let promo = DirectDiscountPromotion::new(
+            PromotionKey::default(),
+            tags.clone(),
+            discount,
+            PromotionBudget::unlimited(),
+        );
 
         assert_eq!(promo.tags(), &tags);
         assert!(matches!(
