@@ -8,7 +8,7 @@ use decimal_percentage::Percentage;
 use rusty_money::{Money, iso::Currency};
 
 use crate::{
-    promotions::{PromotionKey, PromotionSlotKey},
+    promotions::{PromotionKey, PromotionSlotKey, budget::PromotionBudget},
     tags::{collection::TagCollection, string::StringTagCollection},
 };
 
@@ -82,6 +82,7 @@ pub struct MixAndMatchPromotion<'a, T: TagCollection = StringTagCollection> {
     key: PromotionKey,
     slots: Vec<MixAndMatchSlot<T>>,
     discount: MixAndMatchDiscount<'a>,
+    budget: PromotionBudget<'a>,
 }
 
 impl<'a, T: TagCollection> MixAndMatchPromotion<'a, T> {
@@ -90,11 +91,13 @@ impl<'a, T: TagCollection> MixAndMatchPromotion<'a, T> {
         key: PromotionKey,
         slots: Vec<MixAndMatchSlot<T>>,
         discount: MixAndMatchDiscount<'a>,
+        budget: PromotionBudget<'a>,
     ) -> Self {
         Self {
             key,
             slots,
             discount,
+            budget,
         }
     }
 
@@ -111,6 +114,11 @@ impl<'a, T: TagCollection> MixAndMatchPromotion<'a, T> {
     /// Discount.
     pub fn discount(&self) -> &MixAndMatchDiscount<'a> {
         &self.discount
+    }
+
+    /// Return the budget
+    pub const fn budget(&self) -> &PromotionBudget<'a> {
+        &self.budget
     }
 
     /// True if all slots have fixed arity (min == max).
@@ -156,7 +164,8 @@ mod tests {
         ];
         let discount = MixAndMatchDiscount::PercentAllItems(Percentage::from(0.25));
 
-        let promo = MixAndMatchPromotion::new(key, slots.clone(), discount);
+        let promo =
+            MixAndMatchPromotion::new(key, slots.clone(), discount, PromotionBudget::unlimited());
 
         assert_eq!(promo.key(), key);
         assert_eq!(promo.slots().len(), 2);

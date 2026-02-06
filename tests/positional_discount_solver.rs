@@ -9,7 +9,9 @@ use dante::{
     discounts::SimpleDiscount,
     items::{Item, groups::ItemGroup},
     products::ProductKey,
-    promotions::{Promotion, PromotionKey, positional_discount::PositionalDiscountPromotion},
+    promotions::{
+        Promotion, PromotionKey, budget::PromotionBudget, types::PositionalDiscountPromotion,
+    },
     solvers::{Solver, ilp::ILPSolver},
     tags::string::StringTagCollection,
 };
@@ -39,6 +41,7 @@ fn solver_handles_buy_one_get_one_free() -> TestResult {
         2,
         SmallVec::from_vec(vec![1]),
         SimpleDiscount::PercentageOff(decimal_percentage::Percentage::from(1.0)),
+        PromotionBudget::unlimited(),
     ));
 
     let result = ILPSolver::solve(&[promotion], &item_group)?;
@@ -80,6 +83,7 @@ fn solver_handles_three_for_two() -> TestResult {
         3,
         SmallVec::from_vec(vec![2]),
         SimpleDiscount::PercentageOff(decimal_percentage::Percentage::from(1.0)),
+        PromotionBudget::unlimited(),
     ));
 
     let result = ILPSolver::solve(&[promotion], &item_group)?;
@@ -121,6 +125,7 @@ fn solver_handles_buy_two_get_one_half_off() -> TestResult {
         3,
         SmallVec::from_vec(vec![2]),
         SimpleDiscount::PercentageOff(decimal_percentage::Percentage::from(0.5)),
+        PromotionBudget::unlimited(),
     ));
 
     let result = ILPSolver::solve(&[promotion], &item_group)?;
@@ -167,6 +172,7 @@ fn solver_handles_multiple_discount_positions() -> TestResult {
         4,
         SmallVec::from_vec(vec![1, 3]),
         SimpleDiscount::PercentageOff(decimal_percentage::Percentage::from(0.5)),
+        PromotionBudget::unlimited(),
     ));
 
     let result = ILPSolver::solve(&[promotion], &item_group)?;
@@ -203,6 +209,7 @@ fn solver_handles_insufficient_items_for_bundle() -> TestResult {
         3,
         SmallVec::from_vec(vec![2]),
         SimpleDiscount::PercentageOff(decimal_percentage::Percentage::from(1.0)),
+        PromotionBudget::unlimited(),
     ));
 
     let result = ILPSolver::solve(&[promotion], &item_group)?;
@@ -249,6 +256,7 @@ fn solver_handles_multiple_bundles() -> TestResult {
         2,
         SmallVec::from_vec(vec![1]),
         SimpleDiscount::PercentageOff(decimal_percentage::Percentage::from(1.0)),
+        PromotionBudget::unlimited(),
     ));
 
     let result = ILPSolver::solve(&[promotion], &item_group)?;
@@ -285,6 +293,7 @@ fn solver_handles_fixed_price_discount() -> TestResult {
         2,
         SmallVec::from_vec(vec![1]),
         SimpleDiscount::AmountOverride(Money::from_minor(100, GBP)),
+        PromotionBudget::unlimited(),
     ));
 
     let result = ILPSolver::solve(&[promotion], &item_group)?;
@@ -327,6 +336,7 @@ fn solver_handles_mixed_prices_in_bundle() -> TestResult {
         3,
         SmallVec::from_vec(vec![2]),
         SimpleDiscount::PercentageOff(decimal_percentage::Percentage::from(1.0)),
+        PromotionBudget::unlimited(),
     ));
 
     let result = ILPSolver::solve(&[promotion], &item_group)?;
@@ -363,6 +373,7 @@ fn solver_handles_no_matching_tags() -> TestResult {
         2,
         SmallVec::from_vec(vec![1]),
         SimpleDiscount::PercentageOff(decimal_percentage::Percentage::from(1.0)),
+        PromotionBudget::unlimited(),
     ));
 
     let result = ILPSolver::solve(&[promotion], &item_group)?;
@@ -399,6 +410,7 @@ fn solver_handles_amount_off_in_bundle() -> TestResult {
         2,
         SmallVec::from_vec(vec![1]),
         SimpleDiscount::AmountOff(Money::from_minor(30, GBP)),
+        PromotionBudget::unlimited(),
     ));
 
     let result = ILPSolver::solve(&[promotion], &item_group)?;

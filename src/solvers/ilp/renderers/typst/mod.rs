@@ -948,7 +948,8 @@ mod tests {
         items::{Item, groups::ItemGroup},
         products::{Product, ProductKey},
         promotions::{
-            Promotion, PromotionKey, PromotionMeta, direct_discount::DirectDiscountPromotion,
+            Promotion, PromotionKey, PromotionMeta, budget::PromotionBudget,
+            types::DirectDiscountPromotion,
         },
         solvers::ilp::{ensure_presence_vars_len, promotions::PromotionInstances, state::ILPState},
         tags::string::StringTagCollection,
@@ -1313,6 +1314,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::from_strs(&["fruit"]),
             SimpleDiscount::PercentageOff(Percentage::from(0.25)),
+            PromotionBudget::unlimited(),
         ))];
 
         // Create a renderer as observer
@@ -1346,7 +1348,7 @@ mod tests {
             model = model.with(constraint_expr.eq(1));
         }
 
-        let _ = promotion_instances.add_constraints(model, &item_group, &mut renderer);
+        let _model = promotion_instances.add_constraints(model, &item_group, &mut renderer)?;
 
         // Verify captures
         assert_eq!(

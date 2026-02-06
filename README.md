@@ -158,6 +158,28 @@ Total:    £6.80
 Savings:  £3.70 (35.24%)
 ```
 
+## Budgets
+
+Promotions can be configured with two types of budgets:
+
+### Application Budget
+
+Promotions can be configured with an application count budget, which limits 
+the number of times a promotion can be applied to the basket. This can be used
+to enforce redemption rules such as "once every 30 days" if these are
+pre-calculated for the customer. 
+
+This can also be used with direct discounts to dynamically make the first `n` 
+matching items free if they were previously purchased in a bundle by the 
+customer and are being redeemed over successive orders, or to allow for 
+promotions like "every 10th item free" that work across multiple orders.
+
+### Monetary Budget
+
+Promotions can be configured with a monetary budget, which limits the total
+amount that promotion can discount for the basket. This can be used for 
+operational limits like "this promotion has £10,000 total spend remaining".
+
 ## Global Optimisation
 
 Baskets are globally optimised for the lowest price given the items added, and 

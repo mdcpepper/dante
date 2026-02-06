@@ -8,7 +8,7 @@ use smallvec::SmallVec;
 
 use crate::{
     discounts::SimpleDiscount,
-    promotions::PromotionKey,
+    promotions::{PromotionKey, budget::PromotionBudget},
     tags::{collection::TagCollection, string::StringTagCollection},
 };
 
@@ -20,6 +20,7 @@ pub struct PositionalDiscountPromotion<'a, T: TagCollection = StringTagCollectio
     size: u16,
     positions: SmallVec<[u16; 5]>,
     discount: SimpleDiscount<'a>,
+    budget: PromotionBudget<'a>,
 }
 
 impl<'a, T: TagCollection> PositionalDiscountPromotion<'a, T> {
@@ -30,6 +31,7 @@ impl<'a, T: TagCollection> PositionalDiscountPromotion<'a, T> {
         size: u16,
         positions: SmallVec<[u16; 5]>,
         discount: SimpleDiscount<'a>,
+        budget: PromotionBudget<'a>,
     ) -> Self {
         Self {
             key,
@@ -37,6 +39,7 @@ impl<'a, T: TagCollection> PositionalDiscountPromotion<'a, T> {
             size,
             positions,
             discount,
+            budget,
         }
     }
 
@@ -64,6 +67,11 @@ impl<'a, T: TagCollection> PositionalDiscountPromotion<'a, T> {
     pub fn discount(&self) -> &SimpleDiscount<'a> {
         &self.discount
     }
+
+    /// Return the budget
+    pub const fn budget(&self) -> &PromotionBudget<'a> {
+        &self.budget
+    }
 }
 
 #[cfg(test)]
@@ -82,8 +90,14 @@ mod tests {
         let positions = smallvec![0u16, 2u16];
         let discount = SimpleDiscount::AmountOff(Money::from_minor(50, GBP));
 
-        let promo =
-            PositionalDiscountPromotion::new(key, tags.clone(), 3, positions.clone(), discount);
+        let promo = PositionalDiscountPromotion::new(
+            key,
+            tags.clone(),
+            3,
+            positions.clone(),
+            discount,
+            PromotionBudget::unlimited(),
+        );
 
         assert_eq!(promo.key(), key);
         assert_eq!(promo.tags(), &tags);

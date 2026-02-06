@@ -143,7 +143,7 @@ impl ILPSolver {
         }
 
         // Add constraints for all promotions
-        model = promotion_instances.add_constraints(model, item_group, observer);
+        model = promotion_instances.add_constraints(model, item_group, observer)?;
 
         let solution = model.solve()?;
 
@@ -362,8 +362,8 @@ mod tests {
         items::{Item, groups::ItemGroup},
         products::ProductKey,
         promotions::{
-            Promotion, PromotionKey, applications::PromotionApplication,
-            direct_discount::DirectDiscountPromotion,
+            Promotion, PromotionKey, applications::PromotionApplication, budget::PromotionBudget,
+            types::DirectDiscountPromotion,
         },
         tags::{collection::TagCollection, string::StringTagCollection},
     };
@@ -489,6 +489,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::from_strs(&["a"]),
             SimpleDiscount::PercentageOff(Percentage::from(0.25)),
+            PromotionBudget::unlimited(),
         ))];
 
         let result = ILPSolver::solve(&promotions, &item_group)?;
@@ -515,6 +516,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOverride(Money::from_minor(50, GBP)),
+            PromotionBudget::unlimited(),
         ))];
 
         let result = ILPSolver::solve(&promotions, &item_group)?;
@@ -539,6 +541,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::from_strs(&["missing"]),
             SimpleDiscount::PercentageOff(Percentage::from(0.25)),
+            PromotionBudget::unlimited(),
         ))];
 
         let result = ILPSolver::solve(&promotions, &item_group)?;
@@ -562,6 +565,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOverride(Money::from_minor(400, GBP)),
+            PromotionBudget::unlimited(),
         ))];
 
         let result = ILPSolver::solve(&promotions, &item_group)?;
@@ -585,6 +589,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::from_strs(&["a"]),
             SimpleDiscount::AmountOverride(Money::from_minor(50, GBP)),
+            PromotionBudget::unlimited(),
         ))];
 
         let result = ILPSolver::solve(&promotions, &item_group)?;
@@ -747,6 +752,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::from_strs(&["a"]),
             SimpleDiscount::PercentageOff(Percentage::from(0.25)),
+            PromotionBudget::unlimited(),
         ))];
 
         // Solve using trait method
@@ -833,6 +839,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::from_strs(&["a"]),
             SimpleDiscount::PercentageOff(Percentage::from(0.25)),
+            PromotionBudget::unlimited(),
         ))];
 
         let mut observer = MockObserver::default();
@@ -912,6 +919,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::from_strs(&["a"]),
             SimpleDiscount::AmountOverride(Money::from_minor(50, GBP)),
+            PromotionBudget::unlimited(),
         ))];
 
         // Solve without observer

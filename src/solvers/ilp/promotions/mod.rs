@@ -70,17 +70,21 @@ impl<'a> PromotionInstances<'a> {
     }
 
     /// Add constraints for all promotion instances
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any promotion constraint cannot be added to the model.
     pub fn add_constraints<S: SolverModel, O: ILPObserver + ?Sized>(
         &self,
         mut model: S,
         item_group: &ItemGroup<'_>,
         observer: &mut O,
-    ) -> S {
+    ) -> Result<S, SolverError> {
         for instance in &self.instances {
-            model = instance.add_constraints(model, item_group, observer);
+            model = instance.add_constraints(model, item_group, observer)?;
         }
 
-        model
+        Ok(model)
     }
 }
 
@@ -143,11 +147,11 @@ impl<'a> PromotionInstance<'a> {
     fn add_constraints<S: SolverModel, O: ILPObserver + ?Sized>(
         &self,
         model: S,
-        _item_group: &ItemGroup<'_>,
+        item_group: &ItemGroup<'_>,
         observer: &mut O,
-    ) -> S {
+    ) -> Result<S, SolverError> {
         self.vars
-            .add_constraints(model, self.promotion.key(), observer)
+            .add_constraints(model, self.promotion, item_group, observer)
     }
 
     /// Post-solve interpretation for this promotion instance.
@@ -272,18 +276,33 @@ impl PromotionVars {
     }
 
     /// Add promotion-specific constraints to the model.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the promotion type doesn't match the vars
     pub fn add_constraints<S: SolverModel, O: ILPObserver + ?Sized>(
         &self,
         model: S,
-        promotion_key: PromotionKey,
+        promotion: &Promotion<'_>,
+        item_group: &ItemGroup<'_>,
         observer: &mut O,
-    ) -> S {
-        match self {
-            Self::Noop | Self::DirectDiscount(_) => model,
-            Self::MixAndMatch(vars) => vars.add_constraints(model, promotion_key, observer),
-            Self::PositionalDiscount(vars) => {
-                vars.add_dfa_constraints(model, promotion_key, observer)
+    ) -> Result<S, SolverError> {
+        match (self, promotion) {
+            (Self::Noop, _) => Ok(model),
+            (Self::DirectDiscount(vars), Promotion::DirectDiscount(promo)) => {
+                vars.add_budget_constraints(model, promo, item_group, promotion.key(), observer)
             }
+            (Self::MixAndMatch(vars), Promotion::MixAndMatch(promo)) => {
+                let model = vars.add_constraints(model, promotion.key(), observer);
+                vars.add_budget_constraints(model, promo, item_group, promotion.key(), observer)
+            }
+            (Self::PositionalDiscount(vars), Promotion::PositionalDiscount(promo)) => {
+                let model = vars.add_dfa_constraints(model, promotion.key(), observer);
+                vars.add_budget_constraints(model, promo, item_group, promotion.key(), observer)
+            }
+            _ => Err(SolverError::InvariantViolation {
+                message: "promotion type mismatch with vars",
+            }),
         }
     }
 }
@@ -417,8 +436,9 @@ mod tests {
         items::{Item, groups::ItemGroup},
         products::ProductKey,
         promotions::{
-            Promotion, PromotionKey, direct_discount::DirectDiscountPromotion,
-            positional_discount::PositionalDiscountPromotion,
+            Promotion, PromotionKey,
+            budget::PromotionBudget,
+            types::{DirectDiscountPromotion, PositionalDiscountPromotion},
         },
         solvers::ilp::NoopObserver,
         tags::{collection::TagCollection, string::StringTagCollection},
@@ -457,6 +477,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOverride(Money::from_minor(50, GBP)),
+            PromotionBudget::unlimited(),
         ));
 
         let pb = ProblemVariables::new();
@@ -488,6 +509,7 @@ mod tests {
             2,
             SmallVec::from_vec(vec![1u16]),
             SimpleDiscount::PercentageOff(decimal_percentage::Percentage::from(0.5)),
+            PromotionBudget::unlimited(),
         ));
 
         let mut state = ILPState::with_presence_variables(&item_group)?;
@@ -526,6 +548,7 @@ mod tests {
             2,
             SmallVec::from_vec(vec![1u16]),
             SimpleDiscount::PercentageOff(decimal_percentage::Percentage::from(0.5)),
+            PromotionBudget::unlimited(),
         );
 
         let mut state = ILPState::with_presence_variables(&item_group)?;
@@ -542,7 +565,8 @@ mod tests {
         // Smoke test the revised model
         let (pb, cost, _presence) = state.into_parts();
         let model = pb.minimise(cost).using(default_solver);
-        let _model = vars.add_constraints(model, promo.key(), &mut observer);
+        let promotion = Promotion::PositionalDiscount(promo);
+        let _model = vars.add_constraints(model, &promotion, &item_group, &mut observer)?;
 
         Ok(())
     }
@@ -559,6 +583,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOverride(Money::from_minor(50, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         let mut state = ILPState::with_presence_variables(&item_group)?;

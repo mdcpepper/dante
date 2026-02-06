@@ -4,17 +4,15 @@ use slotmap::{SecondaryMap, new_key_type};
 
 use crate::{
     items::groups::ItemGroup,
-    promotions::{
-        direct_discount::DirectDiscountPromotion, mix_and_match::MixAndMatchPromotion,
-        positional_discount::PositionalDiscountPromotion,
+    promotions::types::{
+        DirectDiscountPromotion, MixAndMatchPromotion, PositionalDiscountPromotion,
     },
     solvers::ilp::promotions::ILPPromotion,
 };
 
 pub mod applications;
-pub mod direct_discount;
-pub mod mix_and_match;
-pub mod positional_discount;
+pub mod budget;
+pub mod types;
 
 new_key_type! {
     /// Promotion Key
@@ -73,6 +71,7 @@ impl Promotion<'_> {
 
 #[cfg(test)]
 mod tests {
+    use decimal_percentage::Percentage;
     use rusty_money::{Money, iso::GBP};
     use slotmap::SlotMap;
     use smallvec::SmallVec;
@@ -82,9 +81,11 @@ mod tests {
         items::{Item, groups::ItemGroup},
         products::ProductKey,
         promotions::{
-            direct_discount::DirectDiscountPromotion,
-            mix_and_match::{MixAndMatchPromotion, MixAndMatchSlot},
-            positional_discount::PositionalDiscountPromotion,
+            budget::PromotionBudget,
+            types::{
+                DirectDiscountPromotion, MixAndMatchDiscount, MixAndMatchPromotion,
+                MixAndMatchSlot, PositionalDiscountPromotion,
+            },
         },
         tags::{collection::TagCollection, string::StringTagCollection},
     };
@@ -112,6 +113,7 @@ mod tests {
             key,
             StringTagCollection::empty(),
             SimpleDiscount::AmountOverride(Money::from_minor(50, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         let promo = Promotion::DirectDiscount(inner);
@@ -133,6 +135,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOverride(Money::from_minor(50, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         let promo = Promotion::DirectDiscount(inner);
@@ -151,6 +154,7 @@ mod tests {
             2,
             SmallVec::from_vec(vec![1u16]),
             SimpleDiscount::AmountOff(Money::from_minor(50, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         let promo = Promotion::PositionalDiscount(inner);
@@ -175,6 +179,7 @@ mod tests {
             2,
             SmallVec::from_vec(vec![1u16]),
             SimpleDiscount::AmountOff(Money::from_minor(10, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         let promo = Promotion::PositionalDiscount(inner);
@@ -198,9 +203,8 @@ mod tests {
         let inner = MixAndMatchPromotion::new(
             key,
             slots,
-            crate::promotions::mix_and_match::MixAndMatchDiscount::FixedTotal(Money::from_minor(
-                100, GBP,
-            )),
+            MixAndMatchDiscount::FixedTotal(Money::from_minor(100, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         let promo = Promotion::MixAndMatch(inner);
@@ -245,9 +249,8 @@ mod tests {
         let inner = MixAndMatchPromotion::new(
             PromotionKey::default(),
             slots,
-            crate::promotions::mix_and_match::MixAndMatchDiscount::PercentAllItems(
-                decimal_percentage::Percentage::from(0.25),
-            ),
+            MixAndMatchDiscount::PercentAllItems(Percentage::from(0.25)),
+            PromotionBudget::unlimited(),
         );
 
         let promo = Promotion::MixAndMatch(inner);

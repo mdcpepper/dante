@@ -11,7 +11,8 @@ use dante::{
     products::ProductKey,
     promotions::{
         Promotion, PromotionKey, PromotionSlotKey,
-        mix_and_match::{MixAndMatchDiscount, MixAndMatchPromotion},
+        budget::PromotionBudget,
+        types::{MixAndMatchDiscount, MixAndMatchPromotion},
     },
     solvers::{Solver, ilp::ILPSolver},
     tags::string::StringTagCollection,
@@ -56,6 +57,7 @@ fn solver_handles_percent_all_items() -> TestResult {
         PromotionKey::default(),
         slots,
         MixAndMatchDiscount::PercentAllItems(Percentage::from(0.25)),
+        PromotionBudget::unlimited(),
     ));
 
     let result = ILPSolver::solve(&[promotion], &item_group)?;
@@ -115,6 +117,7 @@ fn solver_handles_percent_cheapest() -> TestResult {
         PromotionKey::default(),
         slots,
         MixAndMatchDiscount::PercentCheapest(Percentage::from(0.50)),
+        PromotionBudget::unlimited(),
     ));
 
     let result = ILPSolver::solve(&[promotion], &item_group)?;
@@ -165,6 +168,7 @@ fn solver_handles_fixed_total() -> TestResult {
         PromotionKey::default(),
         slots,
         MixAndMatchDiscount::FixedTotal(Money::from_minor(500, GBP)),
+        PromotionBudget::unlimited(),
     ));
 
     let result = ILPSolver::solve(&[promotion], &item_group)?;
@@ -213,6 +217,7 @@ fn solver_handles_fixed_cheapest() -> TestResult {
         PromotionKey::default(),
         slots,
         MixAndMatchDiscount::FixedCheapest(Money::from_minor(50, GBP)),
+        PromotionBudget::unlimited(),
     ));
 
     let result = ILPSolver::solve(&[promotion], &item_group)?;
@@ -260,6 +265,7 @@ fn solver_handles_variable_arity_bundles() -> TestResult {
         PromotionKey::default(),
         slots,
         MixAndMatchDiscount::PercentAllItems(Percentage::from(0.25)),
+        PromotionBudget::unlimited(),
     ));
 
     let result = ILPSolver::solve(&[promotion], &item_group)?;
@@ -311,6 +317,7 @@ fn solver_handles_variable_arity_with_max() -> TestResult {
         PromotionKey::default(),
         slots,
         MixAndMatchDiscount::PercentCheapest(Percentage::from(0.50)),
+        PromotionBudget::unlimited(),
     ));
 
     let result = ILPSolver::solve(&[promotion], &item_group)?;
@@ -374,6 +381,7 @@ fn solver_handles_multiple_bundles() -> TestResult {
         PromotionKey::default(),
         slots,
         MixAndMatchDiscount::FixedTotal(Money::from_minor(350, GBP)),
+        PromotionBudget::unlimited(),
     ));
 
     let result = ILPSolver::solve(&[promotion], &item_group)?;
@@ -429,6 +437,7 @@ fn solver_skips_infeasible_mix_and_match() -> TestResult {
         PromotionKey::default(),
         slots,
         MixAndMatchDiscount::FixedTotal(Money::from_minor(300, GBP)),
+        PromotionBudget::unlimited(),
     ));
 
     let result = ILPSolver::solve(&[promotion], &item_group)?;

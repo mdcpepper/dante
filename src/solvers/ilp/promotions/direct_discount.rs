@@ -9,7 +9,7 @@ use rusty_money::Money;
 use crate::{
     items::groups::ItemGroup,
     promotions::{
-        PromotionKey, applications::PromotionApplication, direct_discount::DirectDiscountPromotion,
+        PromotionKey, applications::PromotionApplication, types::DirectDiscountPromotion,
     },
     solvers::{
         SolverError,
@@ -49,6 +49,79 @@ impl DirectDiscountPromotionVars {
         self.item_participation
             .iter()
             .any(|&(idx, var)| idx == item_idx && solution.value(var) > BINARY_THRESHOLD)
+    }
+
+    /// Add budget constraints to the model
+    pub fn add_budget_constraints<S, O: ILPObserver + ?Sized>(
+        &self,
+        model: S,
+        promotion: &DirectDiscountPromotion<'_>,
+        item_group: &ItemGroup<'_>,
+        promotion_key: PromotionKey,
+        observer: &mut O,
+    ) -> Result<S, SolverError>
+    where
+        S: good_lp::SolverModel,
+    {
+        let mut model = model;
+        let budget = promotion.budget();
+
+        // Application count limit: sum(participation_vars) <= limit
+        if let Some(application_limit) = budget.application_limit {
+            let participation_sum: Expression =
+                self.item_participation.iter().map(|(_, var)| *var).sum();
+
+            let limit_f64 = i64_to_f64_exact(i64::from(application_limit)).ok_or(
+                SolverError::MinorUnitsNotRepresentable(i64::from(application_limit)),
+            )?;
+
+            observer.on_promotion_constraint(
+                promotion_key,
+                "application count budget",
+                &participation_sum,
+                "<=",
+                limit_f64,
+            );
+
+            model = model.with(participation_sum.leq(limit_f64));
+        }
+
+        // Monetary limit: sum((full_price - discounted_price) * var) <= limit
+        if let Some(monetary_limit) = budget.monetary_limit {
+            let mut discount_expr = Expression::default();
+
+            for &(item_idx, var) in &self.item_participation {
+                let item = item_group.get_item(item_idx).map_err(SolverError::from)?;
+
+                let full_minor = item.price().to_minor_units();
+                let discounted_minor = promotion
+                    .calculate_discounted_price(item)
+                    .map_err(SolverError::from)?
+                    .to_minor_units();
+
+                let discount_amount = full_minor.saturating_sub(discounted_minor);
+                let coeff = i64_to_f64_exact(discount_amount)
+                    .ok_or(SolverError::MinorUnitsNotRepresentable(discount_amount))?;
+
+                discount_expr += var * coeff;
+            }
+
+            let limit_minor = monetary_limit.to_minor_units();
+            let limit_f64 = i64_to_f64_exact(limit_minor)
+                .ok_or(SolverError::MinorUnitsNotRepresentable(limit_minor))?;
+
+            observer.on_promotion_constraint(
+                promotion_key,
+                "monetary value budget",
+                &discount_expr,
+                "<=",
+                limit_f64,
+            );
+
+            model = model.with(discount_expr.leq(limit_f64));
+        }
+
+        Ok(model)
     }
 }
 
@@ -207,7 +280,7 @@ mod tests {
         discounts::SimpleDiscount,
         items::{Item, groups::ItemGroup},
         products::ProductKey,
-        promotions::PromotionKey,
+        promotions::{PromotionKey, budget::PromotionBudget},
         solvers::{
             SolverError,
             ilp::{NoopObserver, promotions::ILPPromotion},
@@ -257,6 +330,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOverride(Money::from_minor(50, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         assert!(!promo.is_applicable(&item_group));
@@ -276,6 +350,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOff(Money::from_minor(50, iso::USD)),
+            PromotionBudget::unlimited(),
         );
 
         let pb = ProblemVariables::new();
@@ -300,6 +375,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOverride(Money::from_minor(9_007_199_254_740_993, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         let pb = ProblemVariables::new();
@@ -328,6 +404,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOff(Money::from_minor(50, iso::USD)),
+            PromotionBudget::unlimited(),
         );
 
         let pb = ProblemVariables::new();
@@ -338,6 +415,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOverride(Money::from_minor(50, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         let mut observer = NoopObserver;
@@ -369,6 +447,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOverride(Money::from_minor(50, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         let pb = ProblemVariables::new();
@@ -397,6 +476,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOverride(Money::from_minor(50, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         let pb = ProblemVariables::new();
@@ -425,6 +505,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOverride(Money::from_minor(50, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         let pb = ProblemVariables::new();
@@ -487,6 +568,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOff(Money::from_minor(50, iso::USD)),
+            PromotionBudget::unlimited(),
         );
 
         let mut next_bundle_id = 0_usize;
@@ -498,6 +580,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOverride(Money::from_minor(50, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         let mut observer = NoopObserver;
@@ -536,6 +619,7 @@ mod tests {
             PromotionKey::default(),
             StringTagCollection::empty(),
             SimpleDiscount::AmountOverride(Money::from_minor(50, GBP)),
+            PromotionBudget::unlimited(),
         );
 
         // Start with a non-zero bundle_id (e.g., from previous promotions)
