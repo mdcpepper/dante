@@ -519,10 +519,6 @@ mod tests {
 
             Ok(applications)
         }
-
-        fn as_any(&self) -> &dyn std::any::Any {
-            self
-        }
     }
 
     impl ILPPromotion for TestCustomPromotion {

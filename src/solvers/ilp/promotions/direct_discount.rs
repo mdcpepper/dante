@@ -1,7 +1,5 @@
 //! Direct Discount Promotions ILP
 
-use std::any::Any;
-
 use good_lp::{Expression, Solution, Variable, variable};
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
@@ -47,24 +45,6 @@ pub struct DirectDiscountPromotionVars {
 }
 
 impl DirectDiscountPromotionVars {
-    pub fn add_item_participation_term(&self, expr: Expression, item_idx: usize) -> Expression {
-        let mut updated_expr = expr;
-
-        for &(idx, var) in &self.item_participation {
-            if idx == item_idx {
-                updated_expr += var;
-            }
-        }
-
-        updated_expr
-    }
-
-    pub fn is_item_participating(&self, solution: &dyn Solution, item_idx: usize) -> bool {
-        self.item_participation
-            .iter()
-            .any(|&(idx, var)| idx == item_idx && solution.value(var) > BINARY_THRESHOLD)
-    }
-
     fn discounted_minor_for_item(&self, item_idx: usize) -> Result<i64, SolverError> {
         self.discounted_minor_by_item.get(&item_idx).copied().ok_or(
             SolverError::InvariantViolation {
@@ -133,8 +113,38 @@ impl DirectDiscountPromotionVars {
 
         Ok(())
     }
+}
 
-    fn calculate_item_discounts_runtime(
+impl ILPPromotionVars for DirectDiscountPromotionVars {
+    fn add_item_participation_term(&self, expr: Expression, item_idx: usize) -> Expression {
+        let mut updated_expr = expr;
+
+        for &(idx, var) in &self.item_participation {
+            if idx == item_idx {
+                updated_expr += var;
+            }
+        }
+
+        updated_expr
+    }
+
+    fn is_item_participating(&self, solution: &dyn Solution, item_idx: usize) -> bool {
+        self.item_participation
+            .iter()
+            .any(|&(idx, var)| idx == item_idx && solution.value(var) > BINARY_THRESHOLD)
+    }
+
+    fn add_constraints(
+        &self,
+        _promotion_key: PromotionKey,
+        item_group: &ItemGroup<'_>,
+        state: &mut ILPState,
+        observer: &mut dyn ILPObserver,
+    ) -> Result<(), SolverError> {
+        self.add_budget_constraints(self.promotion_key, item_group, state, observer)
+    }
+
+    fn calculate_item_discounts(
         &self,
         solution: &dyn Solution,
         item_group: &ItemGroup<'_>,
@@ -147,13 +157,14 @@ impl DirectDiscountPromotionVars {
             }
 
             let discounted_minor = self.discounted_minor_for_item(item_idx)?;
+
             discounts.insert(item_idx, (item.price().to_minor_units(), discounted_minor));
         }
 
         Ok(discounts)
     }
 
-    fn calculate_item_applications_runtime<'b>(
+    fn calculate_item_applications<'b>(
         &self,
         promotion_key: PromotionKey,
         solution: &dyn Solution,
@@ -186,53 +197,6 @@ impl DirectDiscountPromotionVars {
         }
 
         Ok(applications)
-    }
-}
-
-impl ILPPromotionVars for DirectDiscountPromotionVars {
-    fn add_item_participation_term(&self, expr: Expression, item_idx: usize) -> Expression {
-        DirectDiscountPromotionVars::add_item_participation_term(self, expr, item_idx)
-    }
-
-    fn is_item_participating(&self, solution: &dyn Solution, item_idx: usize) -> bool {
-        DirectDiscountPromotionVars::is_item_participating(self, solution, item_idx)
-    }
-
-    fn add_constraints(
-        &self,
-        _promotion_key: PromotionKey,
-        item_group: &ItemGroup<'_>,
-        state: &mut ILPState,
-        observer: &mut dyn ILPObserver,
-    ) -> Result<(), SolverError> {
-        self.add_budget_constraints(self.promotion_key, item_group, state, observer)
-    }
-
-    fn calculate_item_discounts(
-        &self,
-        solution: &dyn Solution,
-        item_group: &ItemGroup<'_>,
-    ) -> Result<FxHashMap<usize, (i64, i64)>, SolverError> {
-        self.calculate_item_discounts_runtime(solution, item_group)
-    }
-
-    fn calculate_item_applications<'b>(
-        &self,
-        promotion_key: PromotionKey,
-        solution: &dyn Solution,
-        item_group: &ItemGroup<'b>,
-        next_bundle_id: &mut usize,
-    ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
-        self.calculate_item_applications_runtime(
-            promotion_key,
-            solution,
-            item_group,
-            next_bundle_id,
-        )
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }
 

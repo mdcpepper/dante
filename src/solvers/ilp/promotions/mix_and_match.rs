@@ -1,5 +1,6 @@
 //! Mix-and-Match Bundle Promotions ILP
 
+#[cfg(test)]
 use std::any::Any;
 
 use decimal_percentage::Percentage;
@@ -75,37 +76,10 @@ pub struct MixAndMatchVars {
 }
 
 impl MixAndMatchVars {
-    pub fn add_item_participation_term(&self, expr: Expression, item_idx: usize) -> Expression {
-        let mut updated_expr = expr;
+    fn selected_exprs(&self) -> SmallVec<[Expression; 10]> {
+        let mut exprs: SmallVec<[Expression; 10]> = SmallVec::with_capacity(self.target_vars.len());
 
-        for slot in &self.slot_vars {
-            for &(idx, var) in slot {
-                if idx == item_idx {
-                    updated_expr += var;
-                }
-            }
-        }
-
-        updated_expr
-    }
-
-    pub fn is_item_participating(&self, solution: &dyn Solution, item_idx: usize) -> bool {
-        self.slot_vars.iter().any(|slot| {
-            slot.iter()
-                .any(|&(idx, var)| idx == item_idx && solution.value(var) > BINARY_THRESHOLD)
-        })
-    }
-
-    pub fn is_item_priced_by_promotion(&self, solution: &dyn Solution, item_idx: usize) -> bool {
-        if let Some(var) = self.target_vars.get(item_idx).and_then(|v| *v) {
-            return solution.value(var) > BINARY_THRESHOLD;
-        }
-
-        self.is_item_participating(solution, item_idx)
-    }
-
-    fn selected_exprs(&self) -> Vec<Expression> {
-        let mut exprs = vec![Expression::default(); self.target_vars.len()];
+        exprs.resize_with(self.target_vars.len(), Expression::default);
 
         for slot in &self.slot_vars {
             for &(item_idx, var) in slot {
@@ -374,15 +348,32 @@ impl MixAndMatchVars {
 
 impl ILPPromotionVars for MixAndMatchVars {
     fn add_item_participation_term(&self, expr: Expression, item_idx: usize) -> Expression {
-        MixAndMatchVars::add_item_participation_term(self, expr, item_idx)
+        let mut updated_expr = expr;
+
+        for slot in &self.slot_vars {
+            for &(idx, var) in slot {
+                if idx == item_idx {
+                    updated_expr += var;
+                }
+            }
+        }
+
+        updated_expr
     }
 
     fn is_item_participating(&self, solution: &dyn Solution, item_idx: usize) -> bool {
-        MixAndMatchVars::is_item_participating(self, solution, item_idx)
+        self.slot_vars.iter().any(|slot| {
+            slot.iter()
+                .any(|&(idx, var)| idx == item_idx && solution.value(var) > BINARY_THRESHOLD)
+        })
     }
 
     fn is_item_priced_by_promotion(&self, solution: &dyn Solution, item_idx: usize) -> bool {
-        MixAndMatchVars::is_item_priced_by_promotion(self, solution, item_idx)
+        if let Some(var) = self.target_vars.get(item_idx).and_then(|v| *v) {
+            return solution.value(var) > BINARY_THRESHOLD;
+        }
+
+        self.is_item_participating(solution, item_idx)
     }
 
     fn add_constraints(
@@ -392,7 +383,7 @@ impl ILPPromotionVars for MixAndMatchVars {
         state: &mut ILPState,
         observer: &mut dyn ILPObserver,
     ) -> Result<(), SolverError> {
-        MixAndMatchVars::add_constraints(self, promotion_key, state, observer);
+        self.add_constraints(promotion_key, state, observer);
         self.add_budget_constraints(item_group, state, observer)
     }
 
@@ -444,10 +435,6 @@ impl ILPPromotionVars for MixAndMatchVars {
         }
 
         Ok(applications)
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }
 
@@ -1054,9 +1041,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<MixAndMatchVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<MixAndMatchVars>())
             .expect("Expected mix-and-match vars");
 
         vars.add_constraints(promo.key(), &mut state, &mut observer);
@@ -1107,9 +1092,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<MixAndMatchVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<MixAndMatchVars>())
             .expect("Expected mix-and-match vars");
 
         // Select both items into the slots and form one bundle.
@@ -1176,9 +1159,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<MixAndMatchVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<MixAndMatchVars>())
             .expect("Expected mix-and-match vars");
 
         let mut values = Vec::new();
@@ -1250,9 +1231,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<MixAndMatchVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<MixAndMatchVars>())
             .expect("Expected mix-and-match vars");
 
         let mut values = Vec::new();
@@ -1329,9 +1308,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<MixAndMatchVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<MixAndMatchVars>())
             .expect("Expected mix-and-match vars");
 
         let mut values = Vec::new();
@@ -1409,9 +1386,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<MixAndMatchVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<MixAndMatchVars>())
             .expect("Expected mix-and-match vars");
 
         // Should use bundle_formed, not y_bundle
@@ -1464,9 +1439,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<MixAndMatchVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<MixAndMatchVars>())
             .expect("Expected mix-and-match vars");
 
         let mut values = Vec::new();
@@ -1553,9 +1526,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<MixAndMatchVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<MixAndMatchVars>())
             .expect("Expected mix-and-match vars");
 
         let mut values = Vec::new();
@@ -1614,9 +1585,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<MixAndMatchVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<MixAndMatchVars>())
             .expect("Expected mix-and-match vars");
 
         assert!(vars.slot_vars.is_empty());
@@ -1664,9 +1633,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<MixAndMatchVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<MixAndMatchVars>())
             .expect("Expected mix-and-match vars");
 
         // Should return empty vars when not feasible
@@ -1717,9 +1684,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<MixAndMatchVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<MixAndMatchVars>())
             .expect("Expected mix-and-match vars");
 
         // Should use bundle_formed for variable arity
@@ -1782,9 +1747,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<MixAndMatchVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<MixAndMatchVars>())
             .expect("Expected mix-and-match vars");
 
         // Don't select any items
@@ -1878,9 +1841,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<MixAndMatchVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<MixAndMatchVars>())
             .expect("Expected mix-and-match vars");
 
         // Should have slot vars for all three slots
@@ -1935,9 +1896,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<MixAndMatchVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<MixAndMatchVars>())
             .expect("Expected mix-and-match vars");
 
         // Should have one slot

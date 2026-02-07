@@ -1714,7 +1714,7 @@ mod tests {
             };
         }
 
-        let _model = model;
+        drop(model);
 
         // Verify captures
         assert_eq!(

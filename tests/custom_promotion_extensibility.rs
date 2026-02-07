@@ -125,10 +125,6 @@ impl ILPPromotionVars for ExternalCustomPromotionVars {
 
         Ok(applications)
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
 }
 
 impl ILPPromotion for ExternalCustomPromotion {

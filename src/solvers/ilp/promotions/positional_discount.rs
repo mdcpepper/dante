@@ -1,5 +1,8 @@
 //! Positional Discount Promotions ILP
 
+#[cfg(test)]
+use std::any::Any;
+
 use good_lp::{Expression, Solution, Variable, variable};
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
@@ -81,25 +84,6 @@ struct PositionalDFAConstraintData {
 }
 
 impl PositionalDiscountVars {
-    pub fn add_item_participation_term(&self, expr: Expression, item_idx: usize) -> Expression {
-        let mut updated_expr = expr;
-
-        for &(idx, var) in &self.item_participation {
-            if idx == item_idx {
-                updated_expr += var;
-            }
-        }
-
-        updated_expr
-    }
-
-    /// Check if an item is participating in the promotion based on the solution.
-    pub fn is_item_participating(&self, solution: &dyn Solution, item_idx: usize) -> bool {
-        self.item_participation
-            .iter()
-            .any(|&(idx, var)| idx == item_idx && solution.value(var) > BINARY_THRESHOLD)
-    }
-
     /// Check if an item is discounted based on the solution.
     pub fn is_item_discounted(&self, solution: &dyn Solution, item_idx: usize) -> bool {
         self.item_discounts
@@ -418,8 +402,43 @@ impl PositionalDiscountVars {
 
         Ok(())
     }
+}
 
-    fn calculate_item_discounts_runtime(
+impl ILPPromotionVars for PositionalDiscountVars {
+    fn add_item_participation_term(&self, expr: Expression, item_idx: usize) -> Expression {
+        let mut updated_expr = expr;
+
+        for &(idx, var) in &self.item_participation {
+            if idx == item_idx {
+                updated_expr += var;
+            }
+        }
+
+        updated_expr
+    }
+
+    fn is_item_participating(&self, solution: &dyn Solution, item_idx: usize) -> bool {
+        self.item_participation
+            .iter()
+            .any(|&(idx, var)| idx == item_idx && solution.value(var) > BINARY_THRESHOLD)
+    }
+
+    fn is_item_priced_by_promotion(&self, solution: &dyn Solution, item_idx: usize) -> bool {
+        self.is_item_discounted(solution, item_idx)
+    }
+
+    fn add_constraints(
+        &self,
+        promotion_key: PromotionKey,
+        item_group: &ItemGroup<'_>,
+        state: &mut ILPState,
+        observer: &mut dyn ILPObserver,
+    ) -> Result<(), SolverError> {
+        self.add_dfa_constraints(promotion_key, state, observer);
+        self.add_budget_constraints(item_group, state, observer)
+    }
+
+    fn calculate_item_discounts(
         &self,
         solution: &dyn Solution,
         item_group: &ItemGroup<'_>,
@@ -445,7 +464,7 @@ impl PositionalDiscountVars {
         Ok(discounts)
     }
 
-    fn calculate_item_applications_runtime<'b>(
+    fn calculate_item_applications<'b>(
         &self,
         promotion_key: PromotionKey,
         solution: &dyn Solution,
@@ -453,7 +472,6 @@ impl PositionalDiscountVars {
         next_bundle_id: &mut usize,
     ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
         let mut applications = SmallVec::new();
-
         let currency = item_group.currency();
         let bundle_size = self.bundle_size;
 
@@ -494,58 +512,6 @@ impl PositionalDiscountVars {
         }
 
         Ok(applications)
-    }
-}
-
-impl ILPPromotionVars for PositionalDiscountVars {
-    fn add_item_participation_term(&self, expr: Expression, item_idx: usize) -> Expression {
-        PositionalDiscountVars::add_item_participation_term(self, expr, item_idx)
-    }
-
-    fn is_item_participating(&self, solution: &dyn Solution, item_idx: usize) -> bool {
-        PositionalDiscountVars::is_item_participating(self, solution, item_idx)
-    }
-
-    fn is_item_priced_by_promotion(&self, solution: &dyn Solution, item_idx: usize) -> bool {
-        PositionalDiscountVars::is_item_discounted(self, solution, item_idx)
-    }
-
-    fn add_constraints(
-        &self,
-        promotion_key: PromotionKey,
-        item_group: &ItemGroup<'_>,
-        state: &mut ILPState,
-        observer: &mut dyn ILPObserver,
-    ) -> Result<(), SolverError> {
-        self.add_dfa_constraints(promotion_key, state, observer);
-        self.add_budget_constraints(item_group, state, observer)
-    }
-
-    fn calculate_item_discounts(
-        &self,
-        solution: &dyn Solution,
-        item_group: &ItemGroup<'_>,
-    ) -> Result<FxHashMap<usize, (i64, i64)>, SolverError> {
-        self.calculate_item_discounts_runtime(solution, item_group)
-    }
-
-    fn calculate_item_applications<'b>(
-        &self,
-        promotion_key: PromotionKey,
-        solution: &dyn Solution,
-        item_group: &ItemGroup<'b>,
-        next_bundle_id: &mut usize,
-    ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
-        self.calculate_item_applications_runtime(
-            promotion_key,
-            solution,
-            item_group,
-            next_bundle_id,
-        )
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
     }
 }
 
@@ -953,9 +919,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<PositionalDiscountVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<PositionalDiscountVars>())
             .expect("Expected positional discount vars");
 
         assert!(vars.eligible_items.is_empty());
@@ -983,9 +947,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<PositionalDiscountVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<PositionalDiscountVars>())
             .expect("Expected positional discount vars");
 
         let expr = vars.add_item_participation_term(Expression::default(), 1);
@@ -1013,9 +975,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<PositionalDiscountVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<PositionalDiscountVars>())
             .expect("Expected positional discount vars");
 
         assert!(vars.eligible_items.is_empty());
@@ -1290,9 +1250,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<PositionalDiscountVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<PositionalDiscountVars>())
             .expect("Expected positional discount vars");
 
         assert_eq!(vars.eligible_items.len(), 1);
@@ -1317,9 +1275,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<PositionalDiscountVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<PositionalDiscountVars>())
             .expect("Expected positional discount vars");
 
         assert_eq!(
@@ -1354,7 +1310,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        if let Some(vars) = vars.as_any().downcast_ref::<PositionalDiscountVars>() {
+        if let Some(vars) = (vars.as_ref() as &dyn Any).downcast_ref::<PositionalDiscountVars>() {
             let dfa_data = vars.dfa_data.as_ref().expect("expected DFA data");
 
             assert_eq!(dfa_data.take_vars.len(), 4);
@@ -1385,9 +1341,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<PositionalDiscountVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<PositionalDiscountVars>())
             .expect("Expected positional discount vars");
 
         let mut values = Vec::new();
@@ -1430,9 +1384,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<PositionalDiscountVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<PositionalDiscountVars>())
             .expect("Expected positional discount vars");
 
         let mut values = Vec::new();
@@ -1476,9 +1428,7 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let vars = vars
-            .as_any()
-            .downcast_ref::<PositionalDiscountVars>()
+        let vars = ((vars.as_ref() as &dyn Any).downcast_ref::<PositionalDiscountVars>())
             .expect("Expected positional discount vars");
 
         let mut values = Vec::new();
