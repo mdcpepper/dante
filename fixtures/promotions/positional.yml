@@ -1,3 +1,10 @@
+root: all
+
+nodes:
+  all:
+    promotions: [3-for-2]
+    output: pass-through
+
 promotions:
   3-for-2:
     type: positional_discount

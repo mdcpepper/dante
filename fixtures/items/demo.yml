@@ -1,0 +1,6 @@
+items:
+  - cola       # Gets supplier discount, available for meal deal (drink)
+  - sandwich   # Available for meal deal (main)
+  - water      # Available for meal deal (drink) or staff discount
+  - crisps     # Available for meal deal (snack)
+  - newspaper  # Gets staff discount (never promoted)

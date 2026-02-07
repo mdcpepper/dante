@@ -1,0 +1,49 @@
+root: daily-deals
+
+nodes:
+  daily-deals:
+    promotions: [lunch-deal, drinks-deal]
+    output: split
+    participating: loyalty-bonus
+    non-participating: checkout-coupons
+
+  loyalty-bonus:
+    promotions: [loyalty-stacking-bonus]
+    output: pass-through
+
+  checkout-coupons:
+    promotions: [snack-coupon]
+    output: pass-through
+
+promotions:
+  lunch-deal:
+    type: direct_discount
+    name: "Lunch Deal: 25% Off"
+    tags: [lunch]
+    discount:
+      type: percentage_off
+      amount: 25%
+
+  drinks-deal:
+    type: direct_discount
+    name: "Drinks Deal: 20% Off"
+    tags: [drink]
+    discount:
+      type: percentage_off
+      amount: 20%
+
+  loyalty-stacking-bonus:
+    type: direct_discount
+    name: "Loyalty Bonus (on deals)"
+    tags: []
+    discount:
+      type: percentage_off
+      amount: 5%
+
+  snack-coupon:
+    type: direct_discount
+    name: "Coupon: 10% Off Snacks"
+    tags: [snack]
+    discount:
+      type: percentage_off
+      amount: 10%

@@ -26,15 +26,17 @@
 
 use std::fs::File;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use good_lp::{Expression, IntoAffineExpression, Variable};
+use petgraph::graph::NodeIndex;
 use rustc_hash::FxHashMap;
 use slotmap::SlotMap;
 use smallvec::SmallVec;
 
 use crate::{
+    graph::node::PromotionLayerKey,
     items::groups::ItemGroup,
     products::{Product, ProductKey},
     promotions::{PromotionKey, PromotionMeta},
@@ -69,6 +71,22 @@ pub enum TypstRenderError {
     /// Failed to write to the output file.
     #[error("Failed to write to output file: {0}")]
     IoError(#[from] std::io::Error),
+}
+
+/// Captured formulation for a single layer with metadata.
+#[derive(Debug, Clone)]
+pub struct LayerFormulation {
+    /// Layer key
+    pub layer_key: PromotionLayerKey,
+
+    /// Graph node index for debugging
+    pub node_index: NodeIndex,
+
+    /// The captured ILP formulation
+    pub formulation: ILPFormulation,
+
+    /// Solve order (0 = first layer solved, 1 = second, etc.)
+    pub solve_order: usize,
 }
 
 /// Captured ILP formulation data.
@@ -928,6 +946,341 @@ impl ILPObserver for TypstRenderer {
             relation.to_string(),
             rhs,
         ));
+    }
+}
+
+/// Multi-layer renderer for promotion graphs.
+///
+/// Accumulates formulations from all graph layers and renders them
+/// to a single Typst file with section headers.
+#[derive(Debug, Clone)]
+pub struct MultiLayerRenderer {
+    /// Accumulated formulations from all layers
+    layers: Arc<Mutex<Vec<LayerFormulation>>>,
+
+    /// Current layer being captured (`layer_key`, `node_idx`, `solve_order`)
+    current_layer: Arc<Mutex<Option<(PromotionLayerKey, NodeIndex, usize)>>>,
+
+    /// Formulation being built for current layer
+    current_formulation: Arc<Mutex<ILPFormulation>>,
+
+    /// Output file path
+    output_path: PathBuf,
+
+    /// Item metadata for rendering
+    item_names: Vec<Option<String>>,
+    promotion_names: FxHashMap<PromotionKey, String>,
+    layer_names: FxHashMap<PromotionLayerKey, String>,
+}
+
+impl MultiLayerRenderer {
+    /// Create new multi-layer renderer
+    pub fn new(output_path: PathBuf) -> Self {
+        Self {
+            layers: Arc::new(Mutex::new(Vec::new())),
+            current_layer: Arc::new(Mutex::new(None)),
+            current_formulation: Arc::new(Mutex::new(ILPFormulation::new())),
+            output_path,
+            item_names: Vec::new(),
+            promotion_names: FxHashMap::default(),
+            layer_names: FxHashMap::default(),
+        }
+    }
+
+    /// Create with product/promotion metadata for better rendering
+    pub fn new_with_metadata<'a>(
+        output_path: PathBuf,
+        item_group: &ItemGroup<'a>,
+        product_meta: &SlotMap<ProductKey, Product<'a>>,
+        promotion_meta: &SlotMap<PromotionKey, PromotionMeta>,
+    ) -> Self {
+        let item_names = item_group
+            .iter()
+            .map(|item| {
+                product_meta
+                    .get(item.product())
+                    .map(|product| product.name.clone())
+            })
+            .collect();
+
+        let promotion_names = promotion_meta
+            .iter()
+            .map(|(key, meta)| (key, meta.name.clone()))
+            .collect();
+
+        let mut layer_names: FxHashMap<PromotionLayerKey, String> = FxHashMap::default();
+        for (_promotion_key, meta) in promotion_meta {
+            for (layer_key, layer_name) in &meta.layer_names {
+                layer_names
+                    .entry(layer_key)
+                    .or_insert_with(|| layer_name.clone());
+            }
+        }
+
+        Self {
+            layers: Arc::new(Mutex::new(Vec::new())),
+            current_layer: Arc::new(Mutex::new(None)),
+            current_formulation: Arc::new(Mutex::new(ILPFormulation::new())),
+            output_path,
+            item_names,
+            promotion_names,
+            layer_names,
+        }
+    }
+
+    /// Get the output path
+    pub fn output_path(&self) -> &Path {
+        &self.output_path
+    }
+
+    fn layer_label(&self, layer_key: PromotionLayerKey) -> String {
+        self.layer_names
+            .get(&layer_key)
+            .cloned()
+            .unwrap_or_else(|| format!("{layer_key:?}"))
+    }
+
+    /// Write all captured formulations to a single .typ file
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TypstRenderError::IoError`] if the file cannot be created or written.
+    pub fn write(&self) -> Result<(), TypstRenderError> {
+        use std::io::Write;
+
+        let layers = self.layers.lock().map_or_else(
+            |poisoned| poisoned.into_inner().clone(),
+            |layers| layers.clone(),
+        );
+
+        let mut file = File::create(&self.output_path)?;
+
+        // Document header
+        writeln!(file, "= ILP Formulations for Layered Promotion Graph\n")?;
+
+        // Filter out layers with no promotion variables (pure routing layers)
+        let non_trivial_layers: Vec<_> = layers
+            .iter()
+            .filter(|layer| !layer.formulation.promotion_vars.is_empty())
+            .collect();
+
+        if non_trivial_layers.is_empty() {
+            writeln!(file, "_No layers with promotions to display._\n")?;
+            return Ok(());
+        }
+
+        // Render each non-trivial layer
+        for (idx, layer) in non_trivial_layers.iter().enumerate() {
+            let promo_count = layer.formulation.promotion_vars.len();
+            let layer_label = self.layer_label(layer.layer_key);
+
+            writeln!(
+                file,
+                "== Layer {}: {} (Node {:?})\n",
+                layer.solve_order, layer_label, layer.node_index
+            )?;
+
+            writeln!(
+                file,
+                "_Note: This layer contains {promo_count} promotion variable(s)._\n"
+            )?;
+
+            // Render formulation using existing rendering logic
+            let renderer = TypstRenderer {
+                formulation: Arc::new(Mutex::new(layer.formulation.clone())),
+                output_path: self.output_path.clone(),
+                item_names: self.item_names.clone(),
+                promotion_names: self.promotion_names.clone(),
+            };
+
+            let content = renderer.render();
+
+            // Write content, skipping the top-level heading (we already have layer headers)
+            let lines: Vec<&str> = content.lines().collect();
+            let start_idx = lines
+                .iter()
+                .position(|line| line.starts_with("== Decision Variables"))
+                .unwrap_or(0);
+
+            for line in lines.iter().skip(start_idx) {
+                writeln!(file, "{line}")?;
+            }
+
+            // Add pagebreak between layers (not after last)
+            if idx < non_trivial_layers.len() - 1 {
+                writeln!(file, "\n#pagebreak()\n")?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl ILPObserver for MultiLayerRenderer {
+    fn on_presence_variable(&mut self, item_idx: usize, var: Variable, price_minor: i64) {
+        let mut formulation = self
+            .current_formulation
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+
+        let _ = TypstRenderer::assign_label(&mut formulation, var, "x");
+
+        formulation
+            .presence_vars
+            .insert(item_idx, (var, price_minor));
+    }
+
+    fn on_promotion_variable(
+        &mut self,
+        promotion_key: PromotionKey,
+        item_idx: usize,
+        var: Variable,
+        discounted_price_minor: i64,
+        metadata: Option<&str>,
+    ) {
+        let mut formulation = self
+            .current_formulation
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+
+        let _ = TypstRenderer::assign_label(&mut formulation, var, "y");
+
+        formulation.promotion_vars.push(PromotionVariable {
+            promotion_key,
+            item_idx,
+            var,
+            price_minor: discounted_price_minor,
+            metadata: metadata.map(String::from),
+        });
+    }
+
+    fn on_auxiliary_variable(
+        &mut self,
+        promotion_key: PromotionKey,
+        var: Variable,
+        role: &str,
+        position: Option<usize>,
+        state: Option<usize>,
+    ) {
+        let mut formulation = self
+            .current_formulation
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+
+        formulation.auxiliary_vars.push(AuxiliaryVariable {
+            promotion_key,
+            var,
+            role: role.to_string(),
+            position,
+            state,
+        });
+
+        let prefix = match role {
+            "DFA state" => "s",
+            "DFA take" => "t",
+            _ => "a",
+        };
+
+        let _ = TypstRenderer::assign_label(&mut formulation, var, prefix);
+    }
+
+    fn on_objective_term(&mut self, var: Variable, coefficient: f64) {
+        let mut formulation = self
+            .current_formulation
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+
+        let entry = formulation.objective_terms.entry(var).or_insert(0.0);
+
+        *entry += coefficient;
+    }
+
+    fn on_exclusivity_constraint(&mut self, item_idx: usize, constraint_expr: &Expression) {
+        let mut formulation = self
+            .current_formulation
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+
+        formulation
+            .exclusivity_constraints
+            .insert(item_idx, constraint_expr.clone());
+    }
+
+    fn on_promotion_constraint(
+        &mut self,
+        promotion_key: PromotionKey,
+        constraint_type: &str,
+        constraint_expr: &Expression,
+        relation: &str,
+        rhs: f64,
+    ) {
+        let mut formulation = self
+            .current_formulation
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+
+        formulation.promotion_constraints.push((
+            promotion_key,
+            constraint_type.to_string(),
+            constraint_expr.clone(),
+            relation.to_string(),
+            rhs,
+        ));
+    }
+
+    fn on_layer_begin(&mut self, layer_key: PromotionLayerKey, node_idx: NodeIndex) {
+        // Store current layer metadata
+        let mut current = self
+            .current_layer
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+
+        let solve_order = {
+            let layers = self.layers.lock().unwrap_or_else(PoisonError::into_inner);
+            layers.len()
+        };
+
+        *current = Some((layer_key, node_idx, solve_order));
+
+        // Reset formulation for new layer
+        let mut formulation = self
+            .current_formulation
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+
+        *formulation = ILPFormulation::new();
+    }
+
+    fn on_layer_end(&mut self) {
+        // Clone current formulation and add to layers
+        let current_layer = {
+            let current = self
+                .current_layer
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+
+            *current
+        };
+
+        if let Some((layer_key, node_idx, solve_order)) = current_layer {
+            let formulation = {
+                let form = self
+                    .current_formulation
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner);
+
+                form.clone()
+            };
+
+            let mut layers = self.layers.lock().unwrap_or_else(PoisonError::into_inner);
+
+            layers.push(LayerFormulation {
+                layer_key,
+                node_index: node_idx,
+                formulation,
+                solve_order,
+            });
+        }
     }
 }
 

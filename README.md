@@ -6,27 +6,32 @@
 Dante is a high-performance, general-purpose pricing, promotion and basket 
 optimisation engine written in Rust.
 
-* [Promotions](#promotions)
+* [Promotion Types](#promotion-types)
   * [Direct Discount Promotions](#direct-discount-promotions)
   * [Positional Discount Promotions](#positional-discount-promotions)
   * [Mix and Match Promotions](#mix-and-match-promotions)
+* [Stacking](#stacking)
 * [Budgets](#budgets)
   * [Application Budgets](#application-budgets)
   * [Monetary Budgets](#monetary-budgets)
 * [Global Optimisation](#global-optimisation)
+* [Export ILP Formulation](#export-ilp-formulation)
 
-## Promotions
+## Promotion Types
 
 Promotions are rules that select candidate items via tag intersections, and 
 apply a discount to them. Promotion applications are treated as a global basket 
 optimisation problem and the combination that produces the lowest total basket 
 price is chosen.
 
-Each item is either left at full price or claimed by exactly one promotion. 
-Promotion types can add their own constraints (e.g. bundled deals) and produce 
-per-item applications (including original/final prices and bundle groupings) 
-that can be rendered on a receipt. Each promotion type is documented in its own
-section below.
+Within a layer, each item is either left at full price or claimed by exactly one 
+promotion. When using a promotion graph, items can flow through multiple layers 
+and accumulate multiple applications (stacking). Promotion types can add their 
+own constraints (e.g. bundled deals) and produce per-item applications 
+(including original/final prices and bundle groupings) that can be rendered on 
+a receipt. Each promotion type is documented in its own section below.
+
+_NOTE: Example timings are from release builds running on an AMD Ryzen 7 5700U (8C/16T @ 4.37 GHz, 28 GB RAM), using the `microlp` solver_.
 
 ### Direct Discount Promotions
 
@@ -56,20 +61,21 @@ cargo run --release --example basket -- -f direct
 ```
 
 ```
-───────────────────────────────────────────────────────────────────────────────────────────
-        Item       Tags     Base Price   Discounted Price   Savings           Promotion    
-═══════════════════════════════════════════════════════════════════════════════════════════
- #1     Sandwich            £2.99                                                          
-───────────────────────────────────────────────────────────────────────────────────────────
- #2     Drink      20-off   £1.29        £1.03              -£0.26 (20.16%)   #1   20% Off 
-───────────────────────────────────────────────────────────────────────────────────────────
- #3     Snack      20-off   £0.79        £0.47              -£0.32 (40.51%)   #2   40% Off 
-                   40-off                                                                  
-───────────────────────────────────────────────────────────────────────────────────────────
+╭──────┬──────────┬────────┬────────────┬──────────────────┬─────────────────┬──────────────╮
+│      │ Item     │ Tags   │ Base Price │ Discounted Price │         Savings │ Promotion    │
+├──────┼──────────┼────────┼────────────┼──────────────────┼─────────────────┼──────────────┤
+│ #1   │ Sandwich │        │      £2.99 │                  │                 │              │
+├──────┼──────────┼────────┼────────────┼──────────────────┼─────────────────┼──────────────┤
+│ #2   │ Drink    │ 20-off │      £1.29 │            £1.03 │ (20.16%) -£0.26 │ #1   20% Off │
+├──────┼──────────┼────────┼────────────┼──────────────────┼─────────────────┼──────────────┤
+│ #3   │ Snack    │ 20-off │      £0.79 │            £0.47 │ (40.51%) -£0.32 │ #2   40% Off │
+│      │          │ 40-off │            │                  │                 │              │
+╰──────┴──────────┴────────┴────────────┴──────────────────┴─────────────────┴──────────────╯
+ Subtotal:            £5.07  
+    Total:            £4.49  
+  Savings:   (11.44%) £0.58  
 
-Subtotal: £5.07
-Total:    £4.49
-Savings:  £0.58 (11.44%)
+ 56µs 270ns (0.00005627s)
 ```
 
 In this example "Drink" qualifies for the "20% off" promotion, and "Snack" 
@@ -100,19 +106,20 @@ cargo run --release --example basket -- -f positional
 ```
 
 ```
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-        Item                          Tags      Base Price   Discounted Price   Savings         Promotion             
-══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
- #1     Multivitamins 30 gummies      3-for-2   £4.50                                           #1   3-for-2 Vitamins 
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- #2     Vitamin C 1000mg 20 Tablets   3-for-2   £1.99        £0.00              -£1.99 (100%)   #1   3-for-2 Vitamins 
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- #3     Magnesium 180 Tablets         3-for-2   £12.85                                          #1   3-for-2 Vitamins 
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+╭──────┬─────────────────────────────┬─────────┬────────────┬──────────────────┬───────────────┬───────────────────────╮
+│      │ Item                        │ Tags    │ Base Price │ Discounted Price │       Savings │ Promotion             │
+├──────┼─────────────────────────────┼─────────┼────────────┼──────────────────┼───────────────┼───────────────────────┤
+│ #1   │ Multivitamins 30 gummies    │ 3-for-2 │      £4.50 │                  │               │ #1   3-for-2 Vitamins │
+├──────┼─────────────────────────────┼─────────┼────────────┼──────────────────┼───────────────┼───────────────────────┤
+│ #2   │ Vitamin C 1000mg 20 Tablets │ 3-for-2 │      £1.99 │            £0.00 │ (100%) -£1.99 │ #1   3-for-2 Vitamins │
+├──────┼─────────────────────────────┼─────────┼────────────┼──────────────────┼───────────────┼───────────────────────┤
+│ #3   │ Magnesium 180 Tablets       │ 3-for-2 │     £12.85 │                  │               │ #1   3-for-2 Vitamins │
+╰──────┴─────────────────────────────┴─────────┴────────────┴──────────────────┴───────────────┴───────────────────────╯
+ Subtotal:           £19.34  
+    Total:           £17.35  
+  Savings:   (10.29%) £1.99  
 
-Subtotal: £19.34
-Total:    £17.35
-Savings:  £1.99 (10.29%)
+ 181µs 956ns (0.000181956s)
 ```
 
 ### Mix and Match Promotions
@@ -148,23 +155,127 @@ cargo run --release --example basket -- -f mix-and-match -n 5
 ```
 
 ```
-─────────────────────────────────────────────────────────────────────────────────────────────────────
-        Item                Tags    Base Price   Discounted Price   Savings           Promotion      
-═════════════════════════════════════════════════════════════════════════════════════════════════════
- #1     Chicken Wrap        main    £4.00        £2.30              -£1.70 (42.50%)   #1   Meal Deal 
-─────────────────────────────────────────────────────────────────────────────────────────────────────
- #2     Spring Water        drink   £1.00                                                            
-─────────────────────────────────────────────────────────────────────────────────────────────────────
- #3     Apple               snack   £0.80                                                            
-─────────────────────────────────────────────────────────────────────────────────────────────────────
- #4     Fruit Smoothie      drink   £2.50        £1.44              -£1.06 (42.40%)   #1   Meal Deal 
-─────────────────────────────────────────────────────────────────────────────────────────────────────
- #5     Chocolate Brownie   snack   £2.20        £1.26              -£0.94 (42.73%)   #1   Meal Deal 
-─────────────────────────────────────────────────────────────────────────────────────────────────────
+╭──────┬───────────────────┬───────┬────────────┬──────────────────┬─────────────────┬────────────────╮
+│      │ Item              │ Tags  │ Base Price │ Discounted Price │         Savings │ Promotion      │
+├──────┼───────────────────┼───────┼────────────┼──────────────────┼─────────────────┼────────────────┤
+│ #1   │ Chicken Wrap      │ main  │      £4.00 │            £2.30 │ (42.50%) -£1.70 │ #1   Meal Deal │
+├──────┼───────────────────┼───────┼────────────┼──────────────────┼─────────────────┼────────────────┤
+│ #2   │ Spring Water      │ drink │      £1.00 │                  │                 │                │
+├──────┼───────────────────┼───────┼────────────┼──────────────────┼─────────────────┼────────────────┤
+│ #3   │ Apple             │ snack │      £0.80 │                  │                 │                │
+├──────┼───────────────────┼───────┼────────────┼──────────────────┼─────────────────┼────────────────┤
+│ #4   │ Fruit Smoothie    │ drink │      £2.50 │            £1.44 │ (42.40%) -£1.06 │ #1   Meal Deal │
+├──────┼───────────────────┼───────┼────────────┼──────────────────┼─────────────────┼────────────────┤
+│ #5   │ Chocolate Brownie │ snack │      £2.20 │            £1.26 │ (42.73%) -£0.94 │ #1   Meal Deal │
+╰──────┴───────────────────┴───────┴────────────┴──────────────────┴─────────────────┴────────────────╯
+ Subtotal:           £10.50  
+    Total:            £6.80  
+  Savings:   (35.24%) £3.70  
 
-Subtotal: £10.50
-Total:    £6.80
-Savings:  £3.70 (35.24%)
+ 89µs 965ns (0.000089965s)
+```
+
+### Stacking
+
+Dante supports promotion stacking via a graph. Promotions are grouped into 
+layers, and within each layer promotions compete and each item can be claimed 
+by at most one promotion. Items then flow to subsequent layers with updated 
+prices, allowing multiple promotions to apply across layers.
+
+A graph can route items based on whether they have participated in any promotions
+up to and including that layer. Use `output: split` to send participating and 
+non-participating items down different paths, or `output: pass-through` to send 
+everything forward together.
+
+```yaml
+root: daily-deals
+
+nodes:
+  daily-deals:
+    promotions: [lunch-deal, drinks-deal]
+    output: split
+    participating: loyalty-bonus
+    non-participating: checkout-coupons
+
+  loyalty-bonus:
+    promotions: [loyalty-stacking-bonus]
+    output: pass-through
+
+  checkout-coupons:
+    promotions: [snack-coupon]
+    output: pass-through
+
+promotions:
+  lunch-deal:
+    type: direct_discount
+    name: "Lunch Deal: 25% Off"
+    tags: [lunch]
+    discount:
+      type: percentage_off
+      amount: 25%
+
+  drinks-deal:
+    type: direct_discount
+    name: "Drinks Deal: 20% Off"
+    tags: [drink]
+    discount:
+      type: percentage_off
+      amount: 20%
+
+  loyalty-stacking-bonus:
+    type: direct_discount
+    name: "Loyalty Bonus (on deals)"
+    tags: []
+    discount:
+      type: percentage_off
+      amount: 5%
+
+  snack-coupon:
+    type: direct_discount
+    name: "Coupon: 10% Off Snacks"
+    tags: [snack]
+    discount:
+      type: percentage_off
+      amount: 10%
+```
+
+```bash
+cargo run --release --example basket -- -f layered
+```
+
+```
+╭──────┬────────────────────┬───────────┬────────────┬──────────────────┬─────────────────┬───────────────────────────────╮
+│      │ Item               │ Tags      │ Base Price │ Discounted Price │         Savings │ Promotion                     │
+├──────┼────────────────────┼───────────┼────────────┼──────────────────┼─────────────────┼───────────────────────────────┤
+│ #1   │ Chicken Wrap       │ food      │      £3.50 │                  │                 │                               │
+│      │                    │ lunch     │            │                  │                 │                               │
+│      │                    │           │      £3.50 │            £2.62 │ (25.14%) -£0.88 │ #1   Lunch Deal: 25% Off      │
+│      │                    │           │      £2.62 │            £2.49 │  (4.96%) -£0.13 │ #5   Loyalty Bonus (on deals) │
+├──────┼────────────────────┼───────────┼────────────┼──────────────────┼─────────────────┼───────────────────────────────┤
+│ #2   │ Pasta Salad        │ food      │      £3.00 │                  │                 │                               │
+│      │                    │ lunch     │            │                  │                 │                               │
+│      │                    │           │      £3.00 │            £2.25 │ (25.00%) -£0.75 │ #2   Lunch Deal: 25% Off      │
+│      │                    │           │      £2.25 │            £2.14 │  (4.89%) -£0.11 │ #6   Loyalty Bonus (on deals) │
+├──────┼────────────────────┼───────────┼────────────┼──────────────────┼─────────────────┼───────────────────────────────┤
+│ #3   │ Fresh Orange Juice │ drink     │      £2.00 │                  │                 │                               │
+│      │                    │           │      £2.00 │            £1.60 │ (20.00%) -£0.40 │ #3   Drinks Deal: 20% Off     │
+│      │                    │           │      £1.60 │            £1.52 │  (5.00%) -£0.08 │ #7   Loyalty Bonus (on deals) │
+├──────┼────────────────────┼───────────┼────────────┼──────────────────┼─────────────────┼───────────────────────────────┤
+│ #4   │ Sparkling Water    │ drink     │      £1.50 │                  │                 │                               │
+│      │                    │           │      £1.50 │            £1.20 │ (20.00%) -£0.30 │ #4   Drinks Deal: 20% Off     │
+│      │                    │           │      £1.20 │            £1.14 │  (5.00%) -£0.06 │ #8   Loyalty Bonus (on deals) │
+├──────┼────────────────────┼───────────┼────────────┼──────────────────┼─────────────────┼───────────────────────────────┤
+│ #5   │ Morning Newspaper  │ newspaper │      £2.50 │                  │                 │                               │
+├──────┼────────────────────┼───────────┼────────────┼──────────────────┼─────────────────┼───────────────────────────────┤
+│ #6   │ Sea Salt Crisps    │ snack     │      £1.20 │            £1.08 │ (10.00%) -£0.12 │ #9   Coupon: 10% Off Snacks   │
+├──────┼────────────────────┼───────────┼────────────┼──────────────────┼─────────────────┼───────────────────────────────┤
+│ #7   │ Dark Chocolate Bar │ snack     │      £1.80 │            £1.62 │ (10.00%) -£0.18 │ #10  Coupon: 10% Off Snacks   │
+╰──────┴────────────────────┴───────────┴────────────┴──────────────────┴─────────────────┴───────────────────────────────╯
+ Subtotal:           £15.50  
+    Total:           £12.49  
+  Savings:   (19.42%) £3.01  
+
+ 107µs 239ns (0.000107239s)
 ```
 
 ## Budgets
@@ -202,25 +313,26 @@ cargo run --release --example basket -- -f budget-application
 ```
 
 ```
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-        Item              Tags    Base Price   Discounted Price   Savings         Promotion                        
-═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
- #1     Fruit Rollup      snack   £0.80                                                                            
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- #2     Chocolate Bar     snack   £2.50                                           #1   Buy One Get One Free Snacks 
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- #3     Sea Salt Crisps   snack   £1.20                                           #2   Buy One Get One Free Snacks 
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- #4     Fruit Rollup      snack   £0.80                                                                            
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- #5     Chocolate Bar     snack   £2.50        £0.00              -£2.50 (100%)   #1   Buy One Get One Free Snacks 
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- #6     Sea Salt Crisps   snack   £1.20        £0.00              -£1.20 (100%)   #2   Buy One Get One Free Snacks 
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+╭──────┬─────────────────┬───────┬────────────┬──────────────────┬───────────────┬──────────────────────────────────╮
+│      │ Item            │ Tags  │ Base Price │ Discounted Price │       Savings │ Promotion                        │
+├──────┼─────────────────┼───────┼────────────┼──────────────────┼───────────────┼──────────────────────────────────┤
+│ #1   │ Fruit Rollup    │ snack │      £0.80 │                  │               │                                  │
+├──────┼─────────────────┼───────┼────────────┼──────────────────┼───────────────┼──────────────────────────────────┤
+│ #2   │ Chocolate Bar   │ snack │      £2.50 │                  │               │ #1   Buy One Get One Free Snacks │
+├──────┼─────────────────┼───────┼────────────┼──────────────────┼───────────────┼──────────────────────────────────┤
+│ #3   │ Sea Salt Crisps │ snack │      £1.20 │                  │               │ #2   Buy One Get One Free Snacks │
+├──────┼─────────────────┼───────┼────────────┼──────────────────┼───────────────┼──────────────────────────────────┤
+│ #4   │ Fruit Rollup    │ snack │      £0.80 │                  │               │                                  │
+├──────┼─────────────────┼───────┼────────────┼──────────────────┼───────────────┼──────────────────────────────────┤
+│ #5   │ Chocolate Bar   │ snack │      £2.50 │            £0.00 │ (100%) -£2.50 │ #1   Buy One Get One Free Snacks │
+├──────┼─────────────────┼───────┼────────────┼──────────────────┼───────────────┼──────────────────────────────────┤
+│ #6   │ Sea Salt Crisps │ snack │      £1.20 │            £0.00 │ (100%) -£1.20 │ #2   Buy One Get One Free Snacks │
+╰──────┴─────────────────┴───────┴────────────┴──────────────────┴───────────────┴──────────────────────────────────╯
+ Subtotal:            £9.00  
+    Total:            £5.30  
+  Savings:   (41.11%) £3.70  
 
-Subtotal: £9.00
-Total:    £5.30
-Savings:  £3.70 (41.11%)
+ 248µs 685ns (0.000248685s)
 ```
 
 In this example, the BOGOF promotion has a budget of 2 applications. The solver
@@ -253,19 +365,20 @@ cargo run --release --example basket -- -f budget-monetary
 ```
 
 ```
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────
-        Item              Tags        Base Price   Discounted Price   Savings           Promotion              
-═══════════════════════════════════════════════════════════════════════════════════════════════════════════════
- #1     A5 Notebook       clearance   £3.49        £1.74              -£1.75 (50.14%)   #1   50% Off Clearance 
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────
- #2     Paperback Novel   clearance   £6.99                                                                    
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────
- #3     Ballpoint Pen     clearance   £1.99        £0.99              -£1.00 (50.25%)   #2   50% Off Clearance 
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+╭──────┬─────────────────┬───────────┬────────────┬──────────────────┬─────────────────┬────────────────────────╮
+│      │ Item            │ Tags      │ Base Price │ Discounted Price │         Savings │ Promotion              │
+├──────┼─────────────────┼───────────┼────────────┼──────────────────┼─────────────────┼────────────────────────┤
+│ #1   │ A5 Notebook     │ clearance │      £3.49 │            £1.74 │ (50.14%) -£1.75 │ #1   50% Off Clearance │
+├──────┼─────────────────┼───────────┼────────────┼──────────────────┼─────────────────┼────────────────────────┤
+│ #2   │ Paperback Novel │ clearance │      £6.99 │                  │                 │                        │
+├──────┼─────────────────┼───────────┼────────────┼──────────────────┼─────────────────┼────────────────────────┤
+│ #3   │ Ballpoint Pen   │ clearance │      £1.99 │            £0.99 │ (50.25%) -£1.00 │ #2   50% Off Clearance │
+╰──────┴─────────────────┴───────────┴────────────┴──────────────────┴─────────────────┴────────────────────────╯
+ Subtotal:           £12.47  
+    Total:            £9.72  
+  Savings:   (22.05%) £2.75  
 
-Subtotal: £12.47
-Total:    £9.72
-Savings:  £2.75 (22.05%)
+ 95µs 887ns (0.000095887s)
 ```
 
 In this example, all three items qualify for 50% off (with total potential 
@@ -278,9 +391,10 @@ middle item at full price.
 Baskets are globally optimised for the lowest price given the items added, and 
 the configured promotions and budgetary constraints. As items are added to the 
 basket, promotions may "steal" products from existing applications, if doing so 
-results in a lower basket price, removing the previous application, as items 
-may only participate in a single promotion (at least until stacking is 
-implemented).
+results in a lower basket price, removing the previous application. 
+
+Items may only participate in a single promotion per layer, but can carry multiple 
+applications across layers with [stacking](#stacking).
 
 For example, with two configured promotions:
 
@@ -299,35 +413,38 @@ Increase `-n` to add each item to the basket.
 ### 1 Item
 
 ```
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────
-        Item            Tags         Base Price   Discounted Price   Savings           Promotion               
-═══════════════════════════════════════════════════════════════════════════════════════════════════════════════
- #1     Shampoo 400ml   haircare     £4.50        £3.82              -£0.68 (15.11%)   #1   15% Off Toiletries 
-                        toiletries                                                                             
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+╭──────┬───────────────┬────────────┬────────────┬──────────────────┬─────────────────┬─────────────────────────╮
+│      │ Item          │ Tags       │ Base Price │ Discounted Price │         Savings │ Promotion               │
+├──────┼───────────────┼────────────┼────────────┼──────────────────┼─────────────────┼─────────────────────────┤
+│ #1   │ Shampoo 400ml │ haircare   │      £4.50 │            £3.82 │ (15.11%) -£0.68 │ #1   15% Off Toiletries │
+│      │               │ toiletries │            │                  │                 │                         │
+╰──────┴───────────────┴────────────┴────────────┴──────────────────┴─────────────────┴─────────────────────────╯
+ Subtotal:            £4.50  
+    Total:            £3.82  
+  Savings:   (15.11%) £0.68  
 
-Subtotal: £4.50
-Total:    £3.82
-Savings:  £0.68 (15.11%)
+ 49µs 587ns (0.000049587s)
 ```
+
 1 single item has the 15% discount applied.
 
 ### 2 Items
 
 ```
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-        Item                Tags         Base Price   Discounted Price   Savings           Promotion               
-═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
- #1     Shampoo 400ml       haircare     £4.50        £3.82              -£0.68 (15.11%)   #1   15% Off Toiletries 
-                            toiletries                                                                             
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- #2     Conditioner 400ml   haircare     £4.00        £3.40              -£0.60 (15.00%)   #2   15% Off Toiletries 
-                            toiletries                                                                             
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+╭──────┬───────────────────┬────────────┬────────────┬──────────────────┬─────────────────┬─────────────────────────╮
+│      │ Item              │ Tags       │ Base Price │ Discounted Price │         Savings │ Promotion               │
+├──────┼───────────────────┼────────────┼────────────┼──────────────────┼─────────────────┼─────────────────────────┤
+│ #1   │ Shampoo 400ml     │ haircare   │      £4.50 │            £3.82 │ (15.11%) -£0.68 │ #1   15% Off Toiletries │
+│      │                   │ toiletries │            │                  │                 │                         │
+├──────┼───────────────────┼────────────┼────────────┼──────────────────┼─────────────────┼─────────────────────────┤
+│ #2   │ Conditioner 400ml │ haircare   │      £4.00 │            £3.40 │ (15.00%) -£0.60 │ #2   15% Off Toiletries │
+│      │                   │ toiletries │            │                  │                 │                         │
+╰──────┴───────────────────┴────────────┴────────────┴──────────────────┴─────────────────┴─────────────────────────╯
+ Subtotal:            £8.50  
+    Total:            £7.22  
+  Savings:   (15.06%) £1.28  
 
-Subtotal: £8.50
-Total:    £7.22
-Savings:  £1.28 (15.06%)
+ 70µs 267ns (0.000070267s)
 ```
 
 There are still not enough items tagged `haircare` to trigger the 
@@ -336,22 +453,23 @@ There are still not enough items tagged `haircare` to trigger the
 ### 3 Items
 
 ```
-─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-        Item                      Tags         Base Price   Discounted Price   Savings           Promotion               
-═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
- #1     Shampoo 400ml             haircare     £4.50        £3.82              -£0.68 (15.11%)   #1   15% Off Toiletries 
-                                  toiletries                                                                             
-─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- #2     Conditioner 400ml         haircare     £4.00        £3.40              -£0.60 (15.00%)   #2   15% Off Toiletries 
-                                  toiletries                                                                             
-─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- #3     Travel Shower Gel 100ml   haircare     £1.00        £0.85              -£0.15 (15.00%)   #3   15% Off Toiletries 
-                                  toiletries                                                                             
-─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+╭──────┬─────────────────────────┬────────────┬────────────┬──────────────────┬─────────────────┬─────────────────────────╮
+│      │ Item                    │ Tags       │ Base Price │ Discounted Price │         Savings │ Promotion               │
+├──────┼─────────────────────────┼────────────┼────────────┼──────────────────┼─────────────────┼─────────────────────────┤
+│ #1   │ Shampoo 400ml           │ haircare   │      £4.50 │            £3.82 │ (15.11%) -£0.68 │ #1   15% Off Toiletries │
+│      │                         │ toiletries │            │                  │                 │                         │
+├──────┼─────────────────────────┼────────────┼────────────┼──────────────────┼─────────────────┼─────────────────────────┤
+│ #2   │ Conditioner 400ml       │ haircare   │      £4.00 │            £3.40 │ (15.00%) -£0.60 │ #2   15% Off Toiletries │
+│      │                         │ toiletries │            │                  │                 │                         │
+├──────┼─────────────────────────┼────────────┼────────────┼──────────────────┼─────────────────┼─────────────────────────┤
+│ #3   │ Travel Shower Gel 100ml │ haircare   │      £1.00 │            £0.85 │ (15.00%) -£0.15 │ #3   15% Off Toiletries │
+│      │                         │ toiletries │            │                  │                 │                         │
+╰──────┴─────────────────────────┴────────────┴────────────┴──────────────────┴─────────────────┴─────────────────────────╯
+ Subtotal:            £9.50  
+    Total:            £8.07  
+  Savings:   (15.05%) £1.43  
 
-Subtotal: £9.50
-Total:    £8.07
-Savings:  £1.43 (15.05%)
+ 184µs 460ns (0.00018446s)
 ```
 
 Now we have 3 `haircare` items, so the 3-for-2 is technically possible, but 
@@ -364,25 +482,26 @@ customer to retain the original 15% discount.
 ### 4 Items
 
 ```
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-        Item                      Tags         Base Price   Discounted Price   Savings           Promotion                         
-═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
- #1     Shampoo 400ml             haircare     £4.50                                             #2   3-for-2 Haircare Mix & Match 
-                                  toiletries                                                                                       
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- #2     Conditioner 400ml         haircare     £4.00                                             #2   3-for-2 Haircare Mix & Match 
-                                  toiletries                                                                                       
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- #3     Travel Shower Gel 100ml   haircare     £1.00        £0.85              -£0.15 (15.00%)   #1   15% Off Toiletries           
-                                  toiletries                                                                                       
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- #4     Body Wash 500ml           haircare     £3.00        £0.00              -£3.00 (100%)     #2   3-for-2 Haircare Mix & Match 
-                                  toiletries                                                                                       
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+╭──────┬─────────────────────────┬────────────┬────────────┬──────────────────┬─────────────────┬───────────────────────────────────╮
+│      │ Item                    │ Tags       │ Base Price │ Discounted Price │         Savings │ Promotion                         │
+├──────┼─────────────────────────┼────────────┼────────────┼──────────────────┼─────────────────┼───────────────────────────────────┤
+│ #1   │ Shampoo 400ml           │ haircare   │      £4.50 │                  │                 │ #2   3-for-2 Haircare Mix & Match │
+│      │                         │ toiletries │            │                  │                 │                                   │
+├──────┼─────────────────────────┼────────────┼────────────┼──────────────────┼─────────────────┼───────────────────────────────────┤
+│ #2   │ Conditioner 400ml       │ haircare   │      £4.00 │                  │                 │ #2   3-for-2 Haircare Mix & Match │
+│      │                         │ toiletries │            │                  │                 │                                   │
+├──────┼─────────────────────────┼────────────┼────────────┼──────────────────┼─────────────────┼───────────────────────────────────┤
+│ #3   │ Travel Shower Gel 100ml │ haircare   │      £1.00 │            £0.85 │ (15.00%) -£0.15 │ #1   15% Off Toiletries           │
+│      │                         │ toiletries │            │                  │                 │                                   │
+├──────┼─────────────────────────┼────────────┼────────────┼──────────────────┼─────────────────┼───────────────────────────────────┤
+│ #4   │ Body Wash 500ml         │ haircare   │      £3.00 │            £0.00 │   (100%) -£3.00 │ #2   3-for-2 Haircare Mix & Match │
+│      │                         │ toiletries │            │                  │                 │                                   │
+╰──────┴─────────────────────────┴────────────┴────────────┴──────────────────┴─────────────────┴───────────────────────────────────╯
+ Subtotal:           £12.50  
+    Total:            £9.35  
+  Savings:   (25.20%) £3.15  
 
-Subtotal: £12.50
-Total:    £9.35
-Savings:  £3.15 (25.20%)
+ 217µs 785ns (0.000217785s)
 ```
 
 When the "Body Wash" item is added, the basket reaches a point where the 
@@ -399,28 +518,29 @@ giving a new total of £9.35.
 ### 5 Items
 
 ```
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-        Item                          Tags         Base Price   Discounted Price   Savings           Promotion                         
-═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
- #1     Shampoo 400ml                 haircare     £4.50                                             #3   3-for-2 Haircare Mix & Match 
-                                      toiletries                                                                                       
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- #2     Conditioner 400ml             haircare     £4.00        £0.00              -£4.00 (100%)     #3   3-for-2 Haircare Mix & Match 
-                                      toiletries                                                                                       
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- #3     Travel Shower Gel 100ml       haircare     £1.00        £0.85              -£0.15 (15.00%)   #1   15% Off Toiletries           
-                                      toiletries                                                                                       
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- #4     Body Wash 500ml               haircare     £3.00        £2.55              -£0.45 (15.00%)   #2   15% Off Toiletries           
-                                      toiletries                                                                                       
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- #5     Deep Repair Hair Mask 250ml   haircare     £6.00                                             #3   3-for-2 Haircare Mix & Match 
-                                      toiletries                                                                                       
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+╭──────┬─────────────────────────────┬────────────┬────────────┬──────────────────┬─────────────────┬───────────────────────────────────╮
+│      │ Item                        │ Tags       │ Base Price │ Discounted Price │         Savings │ Promotion                         │
+├──────┼─────────────────────────────┼────────────┼────────────┼──────────────────┼─────────────────┼───────────────────────────────────┤
+│ #1   │ Shampoo 400ml               │ haircare   │      £4.50 │                  │                 │ #3   3-for-2 Haircare Mix & Match │
+│      │                             │ toiletries │            │                  │                 │                                   │
+├──────┼─────────────────────────────┼────────────┼────────────┼──────────────────┼─────────────────┼───────────────────────────────────┤
+│ #2   │ Conditioner 400ml           │ haircare   │      £4.00 │            £0.00 │   (100%) -£4.00 │ #3   3-for-2 Haircare Mix & Match │
+│      │                             │ toiletries │            │                  │                 │                                   │
+├──────┼─────────────────────────────┼────────────┼────────────┼──────────────────┼─────────────────┼───────────────────────────────────┤
+│ #3   │ Travel Shower Gel 100ml     │ haircare   │      £1.00 │            £0.85 │ (15.00%) -£0.15 │ #1   15% Off Toiletries           │
+│      │                             │ toiletries │            │                  │                 │                                   │
+├──────┼─────────────────────────────┼────────────┼────────────┼──────────────────┼─────────────────┼───────────────────────────────────┤
+│ #4   │ Body Wash 500ml             │ haircare   │      £3.00 │            £2.55 │ (15.00%) -£0.45 │ #2   15% Off Toiletries           │
+│      │                             │ toiletries │            │                  │                 │                                   │
+├──────┼─────────────────────────────┼────────────┼────────────┼──────────────────┼─────────────────┼───────────────────────────────────┤
+│ #5   │ Deep Repair Hair Mask 250ml │ haircare   │      £6.00 │                  │                 │ #3   3-for-2 Haircare Mix & Match │
+│      │                             │ toiletries │            │                  │                 │                                   │
+╰──────┴─────────────────────────────┴────────────┴────────────┴──────────────────┴─────────────────┴───────────────────────────────────╯
+ Subtotal:           £18.50  
+    Total:           £13.90  
+  Savings:   (24.86%) £4.60  
 
-Subtotal: £18.50
-Total:    £13.90
-Savings:  £4.60 (24.86%)
+ 286µs 990ns (0.00028699s)
 ```
 
 When the "Deep Repair Hair Mask" item is added, the solver re-optimises _again_ 
@@ -435,3 +555,27 @@ of the cheaper Body Wash.
 
 Body Wash is pushed back out of the bundle, and returns to having just the 15% 
 `toiletries` discount.
+
+## Export ILP Formulation
+
+The `basket` example also supports `-o` to capture the ILP formulation as a
+Typst document while solving:
+
+```bash
+cargo run --release --example basket -- -f layered -o layered.typ
+```
+
+This writes the formulation to:
+
+```text
+target/ilp-formulations/layered.typ
+```
+
+If you have Typst installed you can then convert this file to PDF:
+
+```bash
+typst compile target/ilp-formulations/layered.typ --open
+```
+
+There is an ready-made example of of a stacked formulation in `assets/demo.typ` (and the rendered
+`assets/demo.pdf`).

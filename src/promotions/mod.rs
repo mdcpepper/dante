@@ -3,6 +3,7 @@
 use slotmap::{SecondaryMap, new_key_type};
 
 use crate::{
+    graph::node::PromotionLayerKey,
     items::groups::ItemGroup,
     promotions::types::{
         DirectDiscountPromotion, MixAndMatchPromotion, PositionalDiscountPromotion,
@@ -32,6 +33,9 @@ pub struct PromotionMeta {
 
     /// Slot names
     pub slot_names: SecondaryMap<PromotionSlotKey, String>,
+
+    /// Layer names
+    pub layer_names: SecondaryMap<PromotionLayerKey, String>,
 }
 
 /// Promotion enum

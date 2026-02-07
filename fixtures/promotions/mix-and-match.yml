@@ -1,3 +1,10 @@
+root: all
+
+nodes:
+  all:
+    promotions: [meal-deal]
+    output: pass-through
+
 promotions:
   meal-deal:
     type: mix_and_match

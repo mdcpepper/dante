@@ -193,7 +193,7 @@ impl<'a> PromotionInstance<'a> {
     pub fn calculate_item_applications<'b>(
         &self,
         solution: &dyn Solution,
-        item_group: &'b ItemGroup<'_>,
+        item_group: &ItemGroup<'b>,
         next_bundle_id: &mut usize,
     ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
         match &self.promotion {
@@ -400,14 +400,14 @@ pub trait ILPPromotion: Send + Sync {
     /// # Errors
     ///
     /// Returns [`SolverError`] if the discount for a selected item cannot be computed.
-    fn calculate_item_applications<'a>(
+    fn calculate_item_applications<'b>(
         &self,
         promotion_key: PromotionKey,
         solution: &dyn Solution,
         vars: &PromotionVars,
-        item_group: &'a ItemGroup<'_>,
+        item_group: &ItemGroup<'b>,
         next_bundle_id: &mut usize,
-    ) -> Result<SmallVec<[PromotionApplication<'a>; 10]>, SolverError>;
+    ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError>;
 }
 
 /// Check if an i64 value is exactly representable as f64.
@@ -436,12 +436,16 @@ mod tests {
         items::{Item, groups::ItemGroup},
         products::ProductKey,
         promotions::{
-            Promotion, PromotionKey,
+            Promotion, PromotionKey, PromotionSlotKey,
             budget::PromotionBudget,
-            types::{DirectDiscountPromotion, PositionalDiscountPromotion},
+            types::{
+                DirectDiscountPromotion, MixAndMatchDiscount, MixAndMatchPromotion,
+                PositionalDiscountPromotion,
+            },
         },
         solvers::ilp::NoopObserver,
         tags::{collection::TagCollection, string::StringTagCollection},
+        utils::slot,
     };
 
     use super::*;
@@ -467,9 +471,10 @@ mod tests {
 
     #[test]
     fn promotion_instance_calculates_item_discounts_via_inner_promotion() -> TestResult {
-        let items = [Item::new(
+        let items = [Item::with_tags(
             ProductKey::default(),
             Money::from_minor(100, GBP),
+            StringTagCollection::from_strs(&["any"]),
         )];
         let item_group = item_group_from_items(items);
 
@@ -600,5 +605,142 @@ mod tests {
         assert_eq!(i64_to_f64_exact(1_000), Some(1_000.0));
         // 2^53 + 1 is not exactly representable in f64.
         assert_eq!(i64_to_f64_exact(9_007_199_254_740_993), None);
+    }
+
+    #[test]
+    fn promotion_instance_handles_mix_and_match_promotions() -> TestResult {
+        let items = [
+            Item::with_tags(
+                ProductKey::default(),
+                Money::from_minor(200, GBP),
+                StringTagCollection::from_strs(&["main"]),
+            ),
+            Item::with_tags(
+                ProductKey::default(),
+                Money::from_minor(100, GBP),
+                StringTagCollection::from_strs(&["drink"]),
+            ),
+        ];
+
+        let item_group = item_group_from_items(items);
+
+        let mut slot_keys = slotmap::SlotMap::<PromotionSlotKey, ()>::with_key();
+
+        let slots = vec![
+            slot(
+                &mut slot_keys,
+                StringTagCollection::from_strs(&["main"]),
+                1,
+                Some(1),
+            ),
+            slot(
+                &mut slot_keys,
+                StringTagCollection::from_strs(&["drink"]),
+                1,
+                Some(1),
+            ),
+        ];
+
+        let promotion = Promotion::MixAndMatch(MixAndMatchPromotion::new(
+            PromotionKey::default(),
+            slots,
+            MixAndMatchDiscount::PercentAllItems(decimal_percentage::Percentage::from(0.25)),
+            PromotionBudget::unlimited(),
+        ));
+
+        let mut state = ILPState::with_presence_variables(&item_group)?;
+
+        let mut observer = NoopObserver;
+
+        let instance = PromotionInstance::new(&promotion, &item_group, &mut state, &mut observer)?;
+
+        let discounts = instance.calculate_item_discounts(&SelectAllSolution, &item_group)?;
+
+        let mut next_bundle_id = 0;
+
+        let applications = instance.calculate_item_applications(
+            &SelectAllSolution,
+            &item_group,
+            &mut next_bundle_id,
+        )?;
+
+        assert!(!discounts.is_empty());
+        assert!(!applications.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn promotion_vars_noop_and_type_mismatch_paths() -> TestResult {
+        let items = [Item::new(
+            ProductKey::default(),
+            Money::from_minor(100, GBP),
+        )];
+
+        let item_group = item_group_from_items(items);
+
+        let mut observer = NoopObserver;
+
+        assert!(!PromotionVars::Noop.is_item_participating(&SelectAllSolution, 0));
+        assert!(!PromotionVars::Noop.is_item_priced_by_promotion(&SelectAllSolution, 0));
+
+        let mut slot_keys = slotmap::SlotMap::<PromotionSlotKey, ()>::with_key();
+
+        let mm = MixAndMatchPromotion::new(
+            PromotionKey::default(),
+            vec![slot(
+                &mut slot_keys,
+                StringTagCollection::from_strs(&["any"]),
+                1,
+                Some(1),
+            )],
+            MixAndMatchDiscount::PercentAllItems(decimal_percentage::Percentage::from(0.1)),
+            PromotionBudget::unlimited(),
+        );
+
+        let mut state = ILPState::with_presence_variables(&item_group)?;
+
+        let mm_vars = mm.add_variables(mm.key(), &item_group, &mut state, &mut observer)?;
+        let _ = mm_vars.is_item_participating(&SelectAllSolution, 0);
+        let _ = mm_vars.is_item_priced_by_promotion(&SelectAllSolution, 0);
+
+        let direct = DirectDiscountPromotion::new(
+            PromotionKey::default(),
+            StringTagCollection::empty(),
+            SimpleDiscount::AmountOverride(Money::from_minor(50, GBP)),
+            PromotionBudget::unlimited(),
+        );
+
+        let mut state = ILPState::with_presence_variables(&item_group)?;
+
+        let direct_vars =
+            direct.add_variables(direct.key(), &item_group, &mut state, &mut observer)?;
+
+        let positional = Promotion::PositionalDiscount(PositionalDiscountPromotion::new(
+            PromotionKey::default(),
+            StringTagCollection::empty(),
+            1,
+            SmallVec::from_vec(vec![0u16]),
+            SimpleDiscount::PercentageOff(decimal_percentage::Percentage::from(0.5)),
+            PromotionBudget::unlimited(),
+        ));
+
+        let (pb, cost, _presence) = state.into_parts();
+
+        let model = pb.minimise(cost).using(default_solver);
+
+        let Err(err) = direct_vars.add_constraints(model, &positional, &item_group, &mut observer)
+        else {
+            panic!("expected promotion/vars mismatch")
+        };
+
+        assert!(matches!(
+            err,
+            SolverError::InvariantViolation {
+                message: "promotion type mismatch with vars"
+            }
+        ));
+
+        Ok(())
     }
 }

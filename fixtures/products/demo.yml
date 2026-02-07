@@ -1,0 +1,25 @@
+products:
+  cola:
+    name: Coca Cola 500ml
+    tags: [drink, coke]
+    price: 2.50 GBP
+
+  water:
+    name: Water
+    tags: [drink]
+    price: 1.00 GBP
+
+  crisps:
+    name: Crisps
+    tags: [snack]
+    price: 1.50 GBP
+
+  sandwich:
+    name: Chicken Sandwich
+    tags: [main]
+    price: 4.00 GBP
+
+  newspaper:
+    name: Newspaper
+    tags: [newspaper]
+    price: 2.00 GBP

@@ -228,18 +228,20 @@ impl ILPPromotion for DirectDiscountPromotion<'_> {
         Ok(discounts)
     }
 
-    fn calculate_item_applications<'a>(
+    fn calculate_item_applications<'b>(
         &self,
         promotion_key: PromotionKey,
         solution: &dyn Solution,
         vars: &PromotionVars,
-        item_group: &'a ItemGroup<'_>,
+        item_group: &ItemGroup<'b>,
         next_bundle_id: &mut usize,
-    ) -> Result<SmallVec<[PromotionApplication<'a>; 10]>, SolverError> {
+    ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
         let mut applications = SmallVec::new();
         let currency = item_group.currency();
 
-        for (item_idx, item) in item_group.iter().enumerate() {
+        for item_idx in 0..item_group.len() {
+            let item = item_group.get_item(item_idx)?;
+
             if !vars.is_item_participating(solution, item_idx) {
                 continue;
             }
