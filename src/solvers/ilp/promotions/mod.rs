@@ -58,6 +58,7 @@ impl<'a> PromotionInstances<'a> {
     ///
     /// Contributes each promotion's decision variables for the given item to the
     /// presence/exclusivity constraint expression.
+    #[must_use]
     pub fn add_item_presence_term(&self, expr: Expression, item_idx: usize) -> Expression {
         let mut updated_expr = expr;
 
@@ -83,7 +84,7 @@ impl<'a> PromotionInstance<'a> {
     /// Create a new promotion instance (promotion & its solver variables).
     ///
     /// If the promotion cannot apply to the provided item group, we can avoid adding
-    /// any decision variables and instead store a no-op one. This keeps the global
+    /// any decision variables and skip creating vars for it. This keeps the global
     /// model smaller and prevents inapplicable promotions from contributing to the objective
     /// expression (`cost`), or any per-item usage sums used for the exclusivity constraints.
     ///
@@ -113,6 +114,7 @@ impl<'a> PromotionInstance<'a> {
     ///
     /// This is called while building the per-item presence/exclusivity constraint that
     /// enforces each item is either at full price or used by exactly one promotion.
+    #[must_use]
     pub fn add_item_presence_term(&self, expr: Expression, item_idx: usize) -> Expression {
         match &self.vars {
             Some(vars) => vars.add_item_participation_term(expr, item_idx),
@@ -248,9 +250,8 @@ pub type PromotionVars = Box<dyn ILPPromotionVars>;
 /// Notes:
 /// - Implementations should be deterministic for a given item group input; ILP
 ///   solutions are already sensitive to tiny numeric differences.
-/// - Promotions that are not applicable are modeled as a no-op by [`PromotionInstance::new`].
-///   Implementations should therefore treat an "empty" `vars` as "selects nothing" and avoid
-///   introducing constraints that would accidentally affect the global model.
+/// - Inapplicable promotions are skipped by [`PromotionInstance::new`], so no vars bundle
+///   is created and they contribute nothing to the solve model.
 pub trait ILPPromotion: Debug + Send + Sync {
     /// Return the promotion key.
     fn key(&self) -> PromotionKey;
@@ -307,6 +308,7 @@ impl ILPPromotion for Arc<dyn ILPPromotion + '_> {
 }
 
 /// Check if an i64 value is exactly representable as f64.
+#[must_use]
 pub fn i64_to_f64_exact(v: i64) -> Option<f64> {
     let f = v.to_f64()?;
 
@@ -400,7 +402,7 @@ mod tests {
     }
 
     #[test]
-    fn promotion_instance_calculates_item_discounts_via_inner_promotion() -> TestResult {
+    fn promotion_instance_calculates_item_discounts_for_direct_discount() -> TestResult {
         let items = [Item::with_tags(
             ProductKey::default(),
             Money::from_minor(100, GBP),
