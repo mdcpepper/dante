@@ -1,6 +1,14 @@
 # Comprehensive promotion set covering all promotion types
 # Tests direct_discount, positional_discount, and mix_and_match
 
+root: all
+
+nodes:
+  all:
+    promotions:
+      [produce_discount, dairy_discount, bakery_three_for_two, breakfast_bundle]
+    output: pass-through
+
 promotions:
   # Promotion 1: direct_discount with percentage_off
   produce_discount:

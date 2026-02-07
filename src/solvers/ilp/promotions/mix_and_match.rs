@@ -852,14 +852,14 @@ impl ILPPromotion for MixAndMatchPromotion<'_> {
         calculate_discounts_for_vars(self, solution, vars, item_group)
     }
 
-    fn calculate_item_applications<'a>(
+    fn calculate_item_applications<'b>(
         &self,
         promotion_key: PromotionKey,
         solution: &dyn Solution,
         vars: &PromotionVars,
-        item_group: &'a ItemGroup<'_>,
+        item_group: &ItemGroup<'b>,
         next_bundle_id: &mut usize,
-    ) -> Result<SmallVec<[PromotionApplication<'a>; 10]>, SolverError> {
+    ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
         let vars = match vars {
             PromotionVars::MixAndMatch(vars) => vars.as_ref(),
             _ => return Ok(SmallVec::new()),

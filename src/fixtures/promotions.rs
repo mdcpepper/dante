@@ -135,6 +135,7 @@ impl PromotionFixture {
                 let meta = PromotionMeta {
                     name: name.clone(),
                     slot_names: SecondaryMap::new(),
+                    layer_names: SecondaryMap::new(),
                 };
                 let tag_refs: Vec<&str> = tags.iter().map(String::as_str).collect();
                 let budget = budget
@@ -186,6 +187,7 @@ impl PromotionFixture {
                 let meta = PromotionMeta {
                     name: name.clone(),
                     slot_names,
+                    layer_names: SecondaryMap::new(),
                 };
 
                 let budget = budget
@@ -213,6 +215,7 @@ impl PromotionFixture {
                 let meta = PromotionMeta {
                     name: name.clone(),
                     slot_names: SecondaryMap::new(),
+                    layer_names: SecondaryMap::new(),
                 };
 
                 let tag_refs: Vec<&str> = tags.iter().map(String::as_str).collect();

@@ -1,3 +1,10 @@
+root: all
+
+nodes:
+  all:
+    promotions: [snack-bogof]
+    output: pass-through
+
 promotions:
   snack-bogof:
     type: positional_discount

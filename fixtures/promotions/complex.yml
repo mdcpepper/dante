@@ -1,3 +1,10 @@
+root: all
+
+nodes:
+  all:
+    promotions: [toiletries-15-off, haircare-3-for-2]
+    output: pass-through
+
 promotions:
   toiletries-15-off:
     type: direct_discount

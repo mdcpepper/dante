@@ -3,8 +3,9 @@
 use std::any::Any;
 
 use good_lp::{Expression, Variable};
+use petgraph::graph::NodeIndex;
 
-use crate::promotions::PromotionKey;
+use crate::{graph::node::PromotionLayerKey, promotions::PromotionKey};
 
 /// Observer trait for capturing ILP formulation as it's built.
 ///
@@ -114,6 +115,21 @@ pub trait ILPObserver: Send + Sync + Any {
         relation: &str,
         rhs: f64,
     );
+
+    /// Called before solving a layer in graph evaluation.
+    ///
+    /// Allows multi-layer observers to track which layer is being solved.
+    ///
+    /// # Parameters
+    ///
+    /// - `layer_key`: Key identifying the layer
+    /// - `node_idx`: Graph node index for the layer
+    fn on_layer_begin(&mut self, _layer_key: PromotionLayerKey, _node_idx: NodeIndex) {}
+
+    /// Called after solving a layer in graph evaluation.
+    ///
+    /// Allows multi-layer observers to finalize the current layer's formulation.
+    fn on_layer_end(&mut self) {}
 }
 
 /// No-op observer for unobserved solves.
@@ -143,5 +159,50 @@ impl ILPObserver for NoopObserver {
         _: &str,
         _: f64,
     ) {
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use good_lp::{Expression, Variable};
+    use petgraph::graph::NodeIndex;
+
+    use super::*;
+
+    struct MinimalObserver;
+
+    impl ILPObserver for MinimalObserver {
+        fn on_presence_variable(&mut self, _item_idx: usize, _var: Variable, _price_minor: i64) {}
+
+        fn on_promotion_variable(
+            &mut self,
+            _promotion_key: PromotionKey,
+            _item_idx: usize,
+            _var: Variable,
+            _discounted_price_minor: i64,
+            _metadata: Option<&str>,
+        ) {
+        }
+
+        fn on_exclusivity_constraint(&mut self, _item_idx: usize, _constraint_expr: &Expression) {}
+
+        fn on_promotion_constraint(
+            &mut self,
+            _promotion_key: PromotionKey,
+            _constraint_type: &str,
+            _constraint_expr: &Expression,
+            _relation: &str,
+            _rhs: f64,
+        ) {
+        }
+    }
+
+    #[test]
+    fn default_layer_callbacks_are_callable() {
+        let mut observer = MinimalObserver;
+        let obs: &mut dyn ILPObserver = &mut observer;
+
+        obs.on_layer_begin(PromotionLayerKey::default(), NodeIndex::new(0));
+        obs.on_layer_end();
     }
 }

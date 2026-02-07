@@ -1,0 +1,35 @@
+products:
+  chicken-wrap:
+    name: Chicken Wrap
+    tags: [food, lunch]
+    price: 3.50 GBP
+
+  pasta-salad:
+    name: Pasta Salad
+    tags: [food, lunch]
+    price: 3.00 GBP
+
+  orange-juice:
+    name: Fresh Orange Juice
+    tags: [drink]
+    price: 2.00 GBP
+
+  sparkling-water:
+    name: Sparkling Water
+    tags: [drink]
+    price: 1.50 GBP
+
+  newspaper:
+    name: Morning Newspaper
+    tags: [newspaper]
+    price: 2.50 GBP
+
+  crisps:
+    name: Sea Salt Crisps
+    tags: [snack]
+    price: 1.20 GBP
+
+  chocolate-bar:
+    name: Dark Chocolate Bar
+    tags: [snack]
+    price: 1.80 GBP

@@ -1,3 +1,10 @@
+root: all
+
+nodes:
+  all:
+    promotions: [20-off, 40-off]
+    output: pass-through
+
 promotions:
   20-off:
     type: direct_discount

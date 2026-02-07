@@ -1,0 +1,63 @@
+root: supplier-promotions
+
+nodes:
+  supplier-promotions:
+    promotions: [coke-10]
+    output: pass-through
+    next: base-promotions
+
+  base-promotions:
+    promotions: [meal-deal, bogof-drinks]
+    output: split
+    non-participating: staff-discount
+
+  staff-discount:
+    promotions: [staff-discount]
+    output: pass-through
+
+promotions:
+  coke-10:
+    type: direct_discount
+    name: "Supplier: 10% Off Coke"
+    tags: [coke]
+    discount:
+      type: percentage_off
+      amount: 10%
+
+  staff-discount:
+    type: direct_discount
+    name: 5% Staff discount
+    tags: []
+    discount:
+      type: percentage_off
+      amount: 5%
+
+  bogof-drinks:
+    type: positional_discount
+    name: Buy One Get One Free Drinks
+    tags: [drink]
+    size: 2
+    positions: [1]
+    discount:
+      type: percentage_off
+      amount: 100%
+
+  meal-deal:
+    type: mix_and_match
+    name: "£5 Meal Deal"
+    slots:
+      - name: main
+        tags: [main]
+        min: 1
+        max: 1
+      - name: drink
+        tags: [drink]
+        min: 1
+        max: 1
+      - name: snack
+        tags: [snack]
+        min: 1
+        max: 1
+    discount:
+      type: fixed_total
+      amount: 5.00 GBP

@@ -5,6 +5,7 @@
 pub mod basket;
 pub mod discounts;
 pub mod fixtures;
+pub mod graph;
 pub mod items;
 pub mod pricing;
 pub mod products;

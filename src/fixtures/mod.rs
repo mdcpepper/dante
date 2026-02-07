@@ -8,12 +8,18 @@ use thiserror::Error;
 
 use crate::{
     basket::Basket,
-    fixtures::{items::ItemsFixture, promotions::PromotionsFixture},
+    fixtures::{
+        items::ItemsFixture,
+        products::{ProductsFixture, parse_price},
+        promotions::PromotionsFixture,
+    },
+    graph::PromotionGraph,
     items::{Item, groups::ItemGroup},
     products::{Product, ProductKey},
     promotions::{Promotion, PromotionKey, PromotionMeta},
 };
 
+pub mod graph;
 pub mod items;
 pub mod products;
 pub mod promotions;
@@ -85,6 +91,10 @@ pub enum FixtureError {
     /// Basket creation error
     #[error("Failed to create basket: {0}")]
     Basket(#[from] crate::basket::BasketError),
+
+    /// No graph loaded
+    #[error("No graph loaded; call load_graph first or use from_set")]
+    NoGraph,
 }
 
 /// Fixture
@@ -107,6 +117,9 @@ pub struct Fixture<'a> {
     /// Pre-built promotions
     promotions: Vec<Promotion<'a>>,
 
+    /// Parsed promotion graph
+    graph: Option<PromotionGraph<'a>>,
+
     /// Currency for the fixture set
     currency: Option<&'static rusty_money::iso::Currency>,
 }
@@ -127,6 +140,7 @@ impl<'a> Fixture<'a> {
             promotion_keys: FxHashMap::default(),
             items: Vec::new(),
             promotions: Vec::new(),
+            graph: None,
             currency: None,
         }
     }
@@ -139,11 +153,11 @@ impl<'a> Fixture<'a> {
     pub fn load_products(&mut self, name: &str) -> Result<&mut Self, FixtureError> {
         let file_path = self.base_path.join("products").join(format!("{name}.yml"));
         let contents = fs::read_to_string(&file_path)?;
-        let fixture: products::ProductsFixture = serde_norway::from_str(&contents)?;
+        let fixture: ProductsFixture = serde_norway::from_str(&contents)?;
 
         for (key, product_fixture) in fixture.products {
             // Parse to get currency first (before creating Product)
-            let (_minor_units, currency) = products::parse_price(&product_fixture.price)?;
+            let (_minor_units, currency) = parse_price(&product_fixture.price)?;
 
             // Validate currency consistency
             if let Some(existing_currency) = self.currency {
@@ -214,6 +228,7 @@ impl<'a> Fixture<'a> {
             let promotion_key = self.promotion_meta.insert(PromotionMeta {
                 name: String::new(),
                 slot_names: SecondaryMap::new(),
+                layer_names: SecondaryMap::new(),
             });
 
             let (meta, promotion) = promotion_fixture.try_into_promotion(promotion_key)?;
@@ -229,7 +244,7 @@ impl<'a> Fixture<'a> {
         Ok(self)
     }
 
-    /// Load a complete fixture set (products, items, and promotions with the same name)
+    /// Load a complete fixture set (products, items, promotions, and graph)
     ///
     /// # Errors
     ///
@@ -240,7 +255,8 @@ impl<'a> Fixture<'a> {
         fixture
             .load_products(name)?
             .load_items(name)?
-            .load_promotions(name)?;
+            .load_promotions(name)?
+            .load_graph(name)?;
 
         Ok(fixture)
     }
@@ -314,6 +330,15 @@ impl<'a> Fixture<'a> {
     /// Get all promotions
     pub fn promotions(&self) -> &[Promotion<'a>] {
         &self.promotions
+    }
+
+    /// Get the loaded promotion graph.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no graph has been loaded.
+    pub fn graph(&self) -> Result<&PromotionGraph<'a>, FixtureError> {
+        self.graph.as_ref().ok_or(FixtureError::NoGraph)
     }
 
     /// Create a basket from the loaded items
@@ -444,6 +469,7 @@ mod tests {
         assert_eq!(fixture.product_keys.len(), 3);
         assert_eq!(fixture.items.len(), 3);
         assert_eq!(fixture.promotions.len(), 2);
+        assert!(fixture.graph().is_ok());
 
         Ok(())
     }
@@ -523,6 +549,14 @@ mod tests {
         let result = fixture.currency();
 
         assert!(matches!(result, Err(FixtureError::NoCurrency)));
+    }
+
+    #[test]
+    fn fixture_no_graph_returns_error() {
+        let fixture = Fixture::new();
+        let result = fixture.graph();
+
+        assert!(matches!(result, Err(FixtureError::NoGraph)));
     }
 
     #[test]

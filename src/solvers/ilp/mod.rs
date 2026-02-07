@@ -74,20 +74,20 @@ impl ILPSolver {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn solve_with_observer<'a>(
+    pub fn solve_with_observer<'b>(
         promotions: &[Promotion<'_>],
-        item_group: &'a ItemGroup<'_>,
+        item_group: &ItemGroup<'b>,
         observer: &mut dyn ILPObserver,
-    ) -> Result<SolverResult<'a>, SolverError> {
+    ) -> Result<SolverResult<'b>, SolverError> {
         Self::solve_internal(promotions, item_group, observer)
     }
 
     /// Internal solve implementation that supports an observer.
-    fn solve_internal<'group, O: ILPObserver + ?Sized>(
+    fn solve_internal<'b, O: ILPObserver + ?Sized>(
         promotions: &[Promotion<'_>],
-        item_group: &'group ItemGroup<'_>,
+        item_group: &ItemGroup<'b>,
         observer: &mut O,
-    ) -> Result<SolverResult<'group>, SolverError> {
+    ) -> Result<SolverResult<'b>, SolverError> {
         // Return early if the item group is empty
         if item_group.is_empty() {
             return Ok(SolverResult {
@@ -151,8 +151,7 @@ impl ILPSolver {
         // discounted, by which promotions, and what their final prices are.
         let mut used_items: ItemUsageFlags = smallvec![false; item_group.len()];
         let mut total = Money::from_minor(0, item_group.currency());
-        let mut promotion_applications: SmallVec<[PromotionApplication<'group>; 10]> =
-            SmallVec::new();
+        let mut promotion_applications: SmallVec<[PromotionApplication<'b>; 10]> = SmallVec::new();
         let mut next_bundle_id: usize = 0;
         let mut affected_items: ItemIndexList = ItemIndexList::new();
 
@@ -184,10 +183,10 @@ impl ILPSolver {
 }
 
 impl Solver for ILPSolver {
-    fn solve<'a>(
+    fn solve<'b>(
         promotions: &[Promotion<'_>],
-        item_group: &'a ItemGroup<'_>,
-    ) -> Result<SolverResult<'a>, SolverError> {
+        item_group: &ItemGroup<'b>,
+    ) -> Result<SolverResult<'b>, SolverError> {
         let mut observer = NoopObserver;
 
         Self::solve_internal(promotions, item_group, &mut observer)
@@ -252,13 +251,13 @@ fn build_presence_variables_and_objective<O: ILPObserver + ?Sized>(
 ///
 /// Returns a [`SolverError`] if any item in the group contains a Money amount in minor units
 /// that cannot be represented exactly as a solver coefficient.
-fn collect_full_price_items<'a>(
-    item_group: &'a ItemGroup<'_>,
+fn collect_full_price_items<'b>(
+    item_group: &ItemGroup<'b>,
     solution: &impl Solution,
     z: &[Variable],
     used_items: ItemUsageFlags,
-    total: Money<'a, Currency>,
-) -> Result<FullPriceState<'a>, SolverError> {
+    total: Money<'b, Currency>,
+) -> Result<FullPriceState<'b>, SolverError> {
     let mut unaffected_items = SmallVec::new();
     let mut used_items = used_items;
     let mut total = total;
@@ -302,12 +301,12 @@ fn collect_full_price_items<'a>(
 /// # Errors
 ///
 /// Returns a [`SolverError`] if adding a final price to `total` fails.
-fn apply_promotion_applications<'a>(
+fn apply_promotion_applications<'b>(
     item_count: usize,
     used_items: ItemUsageFlags,
-    total: Money<'a, Currency>,
-    applications: &[PromotionApplication<'a>],
-) -> Result<AppliedPromotionState<'a>, SolverError> {
+    total: Money<'b, Currency>,
+    applications: &[PromotionApplication<'b>],
+) -> Result<AppliedPromotionState<'b>, SolverError> {
     // The indexes of items that are being affected by promotions
     let mut affected_items: ItemIndexList = ItemIndexList::new();
 
