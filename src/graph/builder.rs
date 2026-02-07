@@ -198,7 +198,9 @@ impl<'a> PromotionGraphBuilder<'a> {
     /// # Errors
     ///
     /// Returns a [`GraphError`] if any validation rule is violated.
-    pub fn build(self) -> Result<(StableDiGraph<LayerNode<'a>, LayerEdge>, NodeIndex), GraphError> {
+    pub(crate) fn build(
+        self,
+    ) -> Result<(StableDiGraph<LayerNode<'a>, LayerEdge>, NodeIndex), GraphError> {
         // 1. Root must be set
         let root = self.root.ok_or(GraphError::NoRoot)?;
 
