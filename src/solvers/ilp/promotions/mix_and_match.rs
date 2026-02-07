@@ -385,14 +385,6 @@ impl ILPPromotionVars for MixAndMatchVars {
         MixAndMatchVars::is_item_priced_by_promotion(self, solution, item_idx)
     }
 
-    fn owns_runtime_behavior(&self) -> bool {
-        true
-    }
-
-    fn runtime_kind(&self) -> &'static str {
-        "mix_and_match"
-    }
-
     fn add_constraints(
         &self,
         promotion_key: PromotionKey,
@@ -939,54 +931,6 @@ impl ILPPromotion for MixAndMatchPromotion<'_> {
             monetary_limit_minor,
         }))
     }
-
-    fn add_constraints(
-        &self,
-        vars: &dyn ILPPromotionVars,
-        item_group: &ItemGroup<'_>,
-        state: &mut ILPState,
-        observer: &mut dyn ILPObserver,
-    ) -> Result<(), SolverError> {
-        if vars.owns_runtime_behavior() && vars.runtime_kind() == "mix_and_match" {
-            vars.add_constraints(self.key(), item_group, state, observer)
-        } else {
-            Err(SolverError::InvariantViolation {
-                message: "promotion type mismatch with vars",
-            })
-        }
-    }
-
-    fn calculate_item_discounts(
-        &self,
-        solution: &dyn Solution,
-        vars: &dyn ILPPromotionVars,
-        item_group: &ItemGroup<'_>,
-    ) -> Result<FxHashMap<usize, (i64, i64)>, SolverError> {
-        if vars.owns_runtime_behavior() && vars.runtime_kind() == "mix_and_match" {
-            vars.calculate_item_discounts(solution, item_group)
-        } else {
-            Err(SolverError::InvariantViolation {
-                message: "promotion type mismatch with vars",
-            })
-        }
-    }
-
-    fn calculate_item_applications<'b>(
-        &self,
-        promotion_key: PromotionKey,
-        solution: &dyn Solution,
-        vars: &dyn ILPPromotionVars,
-        item_group: &ItemGroup<'b>,
-        next_bundle_id: &mut usize,
-    ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
-        if vars.owns_runtime_behavior() && vars.runtime_kind() == "mix_and_match" {
-            vars.calculate_item_applications(promotion_key, solution, item_group, next_bundle_id)
-        } else {
-            Err(SolverError::InvariantViolation {
-                message: "promotion type mismatch with vars",
-            })
-        }
-    }
 }
 
 #[cfg(test)]
@@ -1182,7 +1126,7 @@ mod tests {
         }
 
         let solution = MapSolution::with(&values);
-        let discounts = promo.calculate_item_discounts(&solution, vars, &item_group)?;
+        let discounts = vars.calculate_item_discounts(&solution, &item_group)?;
 
         assert_eq!(discounts.len(), 2);
 
@@ -1250,7 +1194,7 @@ mod tests {
         }
 
         let solution = MapSolution::with(&values);
-        let discounts = promo.calculate_item_discounts(&solution, vars, &item_group)?;
+        let discounts = vars.calculate_item_discounts(&solution, &item_group)?;
 
         assert_eq!(discounts.len(), 2);
 
@@ -1329,7 +1273,7 @@ mod tests {
         }
 
         let solution = MapSolution::with(&values);
-        let discounts = promo.calculate_item_discounts(&solution, vars, &item_group)?;
+        let discounts = vars.calculate_item_discounts(&solution, &item_group)?;
 
         assert_eq!(discounts.len(), 2);
 
@@ -1408,7 +1352,7 @@ mod tests {
         }
 
         let solution = MapSolution::with(&values);
-        let discounts = promo.calculate_item_discounts(&solution, vars, &item_group)?;
+        let discounts = vars.calculate_item_discounts(&solution, &item_group)?;
 
         assert_eq!(discounts.len(), 2);
 
@@ -1540,10 +1484,9 @@ mod tests {
         let solution = MapSolution::with(&values);
         let mut next_bundle_id = 0;
 
-        let applications = promo.calculate_item_applications(
+        let applications = vars.calculate_item_applications(
             promo.key(),
             &solution,
-            vars,
             &item_group,
             &mut next_bundle_id,
         )?;
@@ -1632,10 +1575,9 @@ mod tests {
         let solution = MapSolution::with(&values);
         let mut next_bundle_id = 0;
 
-        let applications = promo.calculate_item_applications(
+        let applications = vars.calculate_item_applications(
             promo.key(),
             &solution,
-            vars,
             &item_group,
             &mut next_bundle_id,
         )?;
@@ -1849,10 +1791,9 @@ mod tests {
         let solution = MapSolution::default();
         let mut next_bundle_id = 0;
 
-        let applications = promo.calculate_item_applications(
+        let applications = vars.calculate_item_applications(
             promo.key(),
             &solution,
-            vars,
             &item_group,
             &mut next_bundle_id,
         )?;

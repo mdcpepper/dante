@@ -431,6 +431,8 @@ mod tests {
 
     #[derive(Debug)]
     struct TestCustomPromotionVars {
+        key: PromotionKey,
+        final_minor: i64,
         item_participation: SmallVec<[(usize, Variable); 10]>,
     }
 
@@ -451,6 +453,71 @@ mod tests {
             self.item_participation
                 .iter()
                 .any(|&(idx, var)| idx == item_idx && solution.value(var) > BINARY_THRESHOLD)
+        }
+
+        fn add_constraints(
+            &self,
+            _promotion_key: PromotionKey,
+            _item_group: &ItemGroup<'_>,
+            state: &mut ILPState,
+            observer: &mut dyn ILPObserver,
+        ) -> Result<(), SolverError> {
+            let expr: Expression = self.item_participation.iter().map(|(_, var)| *var).sum();
+            observer.on_promotion_constraint(self.key, "test custom limit", &expr, "<=", 1.0);
+            state.add_leq_constraint(expr, 1.0);
+
+            Ok(())
+        }
+
+        fn calculate_item_discounts(
+            &self,
+            solution: &dyn Solution,
+            item_group: &ItemGroup<'_>,
+        ) -> Result<FxHashMap<usize, (i64, i64)>, SolverError> {
+            let mut discounts = FxHashMap::default();
+
+            for (item_idx, item) in item_group.iter().enumerate() {
+                if self.is_item_participating(solution, item_idx) {
+                    discounts.insert(
+                        item_idx,
+                        (item.price().to_minor_units(), self.final_minor.max(0)),
+                    );
+                }
+            }
+
+            Ok(discounts)
+        }
+
+        fn calculate_item_applications<'b>(
+            &self,
+            promotion_key: PromotionKey,
+            solution: &dyn Solution,
+            item_group: &ItemGroup<'b>,
+            next_bundle_id: &mut usize,
+        ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
+            let mut applications = SmallVec::new();
+            let currency = item_group.currency();
+
+            for item_idx in 0..item_group.len() {
+                let item = item_group.get_item(item_idx)?;
+
+                if !self.is_item_participating(solution, item_idx) {
+                    continue;
+                }
+
+                let bundle_id = *next_bundle_id;
+                *next_bundle_id += 1;
+
+                applications.push(PromotionApplication {
+                    promotion_key,
+                    item_idx,
+                    bundle_id,
+                    original_price: *item.price(),
+                    final_price: Money::from_minor(self.final_minor.max(0), currency),
+                });
+            }
+
+            Ok(applications)
         }
 
         fn as_any(&self) -> &dyn std::any::Any {
@@ -491,80 +558,11 @@ mod tests {
                 observer.on_objective_term(var, coeff);
             }
 
-            Ok(Box::new(TestCustomPromotionVars { item_participation }))
-        }
-
-        fn add_constraints(
-            &self,
-            vars: &dyn ILPPromotionVars,
-            _item_group: &ItemGroup<'_>,
-            state: &mut ILPState,
-            observer: &mut dyn ILPObserver,
-        ) -> Result<(), SolverError> {
-            let Some(vars) = vars.as_any().downcast_ref::<TestCustomPromotionVars>() else {
-                return Err(SolverError::InvariantViolation {
-                    message: "promotion type mismatch with vars",
-                });
-            };
-
-            let expr: Expression = vars.item_participation.iter().map(|(_, var)| *var).sum();
-            observer.on_promotion_constraint(self.key, "test custom limit", &expr, "<=", 1.0);
-            state.add_leq_constraint(expr, 1.0);
-
-            Ok(())
-        }
-
-        fn calculate_item_discounts(
-            &self,
-            solution: &dyn Solution,
-            vars: &dyn ILPPromotionVars,
-            item_group: &ItemGroup<'_>,
-        ) -> Result<FxHashMap<usize, (i64, i64)>, SolverError> {
-            let mut discounts = FxHashMap::default();
-
-            for (item_idx, item) in item_group.iter().enumerate() {
-                if vars.is_item_participating(solution, item_idx) {
-                    discounts.insert(
-                        item_idx,
-                        (item.price().to_minor_units(), self.final_minor.max(0)),
-                    );
-                }
-            }
-
-            Ok(discounts)
-        }
-
-        fn calculate_item_applications<'b>(
-            &self,
-            promotion_key: PromotionKey,
-            solution: &dyn Solution,
-            vars: &dyn ILPPromotionVars,
-            item_group: &ItemGroup<'b>,
-            next_bundle_id: &mut usize,
-        ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
-            let mut applications = SmallVec::new();
-            let currency = item_group.currency();
-
-            for item_idx in 0..item_group.len() {
-                let item = item_group.get_item(item_idx)?;
-
-                if !vars.is_item_participating(solution, item_idx) {
-                    continue;
-                }
-
-                let bundle_id = *next_bundle_id;
-                *next_bundle_id += 1;
-
-                applications.push(PromotionApplication {
-                    promotion_key,
-                    item_idx,
-                    bundle_id,
-                    original_price: *item.price(),
-                    final_price: Money::from_minor(self.final_minor.max(0), currency),
-                });
-            }
-
-            Ok(applications)
+            Ok(Box::new(TestCustomPromotionVars {
+                key: self.key,
+                final_minor: self.final_minor,
+                item_participation,
+            }))
         }
     }
 

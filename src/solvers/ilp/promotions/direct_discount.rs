@@ -198,14 +198,6 @@ impl ILPPromotionVars for DirectDiscountPromotionVars {
         DirectDiscountPromotionVars::is_item_participating(self, solution, item_idx)
     }
 
-    fn owns_runtime_behavior(&self) -> bool {
-        true
-    }
-
-    fn runtime_kind(&self) -> &'static str {
-        "direct_discount"
-    }
-
     fn add_constraints(
         &self,
         _promotion_key: PromotionKey,
@@ -331,54 +323,6 @@ impl ILPPromotion for DirectDiscountPromotion<'_> {
             monetary_limit_minor: self.budget().monetary_limit.map(|v| v.to_minor_units()),
         }))
     }
-
-    fn add_constraints(
-        &self,
-        vars: &dyn ILPPromotionVars,
-        item_group: &ItemGroup<'_>,
-        state: &mut ILPState,
-        observer: &mut dyn ILPObserver,
-    ) -> Result<(), SolverError> {
-        if vars.owns_runtime_behavior() && vars.runtime_kind() == "direct_discount" {
-            vars.add_constraints(self.key(), item_group, state, observer)
-        } else {
-            Err(SolverError::InvariantViolation {
-                message: "promotion type mismatch with vars",
-            })
-        }
-    }
-
-    fn calculate_item_discounts(
-        &self,
-        solution: &dyn Solution,
-        vars: &dyn ILPPromotionVars,
-        item_group: &ItemGroup<'_>,
-    ) -> Result<FxHashMap<usize, (i64, i64)>, SolverError> {
-        if vars.owns_runtime_behavior() && vars.runtime_kind() == "direct_discount" {
-            vars.calculate_item_discounts(solution, item_group)
-        } else {
-            Err(SolverError::InvariantViolation {
-                message: "promotion type mismatch with vars",
-            })
-        }
-    }
-
-    fn calculate_item_applications<'b>(
-        &self,
-        promotion_key: PromotionKey,
-        solution: &dyn Solution,
-        vars: &dyn ILPPromotionVars,
-        item_group: &ItemGroup<'b>,
-        next_bundle_id: &mut usize,
-    ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
-        if vars.owns_runtime_behavior() && vars.runtime_kind() == "direct_discount" {
-            vars.calculate_item_applications(promotion_key, solution, item_group, next_bundle_id)
-        } else {
-            Err(SolverError::InvariantViolation {
-                message: "promotion type mismatch with vars",
-            })
-        }
-    }
 }
 
 #[cfg(test)]
@@ -459,8 +403,6 @@ mod tests {
         )];
 
         let item_group = item_group_from_items(items);
-
-        // Create a discount with currency mismatch to trigger an error
         let promo = DirectDiscountPromotion::new(
             PromotionKey::default(),
             StringTagCollection::empty(),
@@ -514,14 +456,6 @@ mod tests {
 
         let item_group = item_group_from_items(items);
 
-        // Create a discount with currency mismatch to trigger an error
-        let promo = DirectDiscountPromotion::new(
-            PromotionKey::default(),
-            StringTagCollection::empty(),
-            SimpleDiscount::AmountOff(Money::from_minor(50, iso::USD)),
-            PromotionBudget::unlimited(),
-        );
-
         let pb = ProblemVariables::new();
         let cost = Expression::default();
         let mut state = ILPState::new(pb, cost);
@@ -537,8 +471,9 @@ mod tests {
 
         let vars = promo_with_vars.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let discounts =
-            promo.calculate_item_discounts(&SelectAllSolution, vars.as_ref(), &item_group)?;
+        let discounts = vars
+            .as_ref()
+            .calculate_item_discounts(&SelectAllSolution, &item_group)?;
         assert_eq!(discounts.get(&0), Some(&(100, 50)));
 
         Ok(())
@@ -566,8 +501,9 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let discounts =
-            promo.calculate_item_discounts(&SelectNoneSolution, vars.as_ref(), &item_group)?;
+        let discounts = vars
+            .as_ref()
+            .calculate_item_discounts(&SelectNoneSolution, &item_group)?;
 
         assert!(discounts.is_empty());
 
@@ -596,8 +532,9 @@ mod tests {
         let mut observer = NoopObserver;
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let discounts =
-            promo.calculate_item_discounts(&SelectAllSolution, vars.as_ref(), &item_group)?;
+        let discounts = vars
+            .as_ref()
+            .calculate_item_discounts(&SelectAllSolution, &item_group)?;
 
         assert_eq!(discounts.get(&0), Some(&(100, 50)));
 
@@ -627,10 +564,9 @@ mod tests {
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
         let mut next_bundle_id = 0_usize;
 
-        let apps = promo.calculate_item_applications(
+        let apps = vars.as_ref().calculate_item_applications(
             PromotionKey::default(),
             &SelectAllSolution,
-            vars.as_ref(),
             &item_group,
             &mut next_bundle_id,
         )?;
@@ -675,14 +611,6 @@ mod tests {
 
         let item_group = item_group_from_items(items);
 
-        // Create a discount with currency mismatch to trigger an error
-        let promo = DirectDiscountPromotion::new(
-            PromotionKey::default(),
-            StringTagCollection::empty(),
-            SimpleDiscount::AmountOff(Money::from_minor(50, iso::USD)),
-            PromotionBudget::unlimited(),
-        );
-
         let mut next_bundle_id = 0_usize;
         let pb = ProblemVariables::new();
         let cost = Expression::default();
@@ -699,10 +627,9 @@ mod tests {
 
         let vars = promo_with_vars.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let apps = promo.calculate_item_applications(
+        let apps = vars.as_ref().calculate_item_applications(
             PromotionKey::default(),
             &SelectAllSolution,
-            vars.as_ref(),
             &item_group,
             &mut next_bundle_id,
         )?;
@@ -741,10 +668,9 @@ mod tests {
 
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let apps = promo.calculate_item_applications(
+        let apps = vars.as_ref().calculate_item_applications(
             PromotionKey::default(),
             &SelectAllSolution,
-            vars.as_ref(),
             &item_group,
             &mut next_bundle_id,
         )?;
