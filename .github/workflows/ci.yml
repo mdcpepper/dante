@@ -90,7 +90,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           # Run tarpaulin and capture output for coverage parsing
-          cargo tarpaulin --verbose --all-features --workspace --timeout 600 --out Lcov | tee coverage_output.txt
+          cargo tarpaulin --engine llvm --verbose --all-features --workspace --timeout 600 --out Lcov | tee coverage_output.txt
 
       - name: Check coverage threshold
         run: |
