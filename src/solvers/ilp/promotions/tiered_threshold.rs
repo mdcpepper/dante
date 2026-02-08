@@ -28,8 +28,11 @@ use crate::{
 /// Per-qualifying-tier data captured during variable creation.
 #[derive(Debug)]
 struct QualifyingTier {
-    /// Spend threshold in minor units.
-    threshold_minor: i64,
+    /// Optional spend threshold in minor units.
+    monetary_threshold_minor: Option<i64>,
+
+    /// Optional minimum number of contributing items required.
+    item_count_threshold: Option<u32>,
 
     /// Binary auxiliary variable: is this tier active?
     tier_var: Variable,
@@ -179,33 +182,59 @@ impl ILPPromotionVars for TieredThresholdPromotionVars {
                 state.add_leq_constraint(link_expr, 0.0);
             }
 
-            // Threshold spend: sum(price_i * c_{t,i}) >= threshold_t * tier_t
-            let mut contribution_expr = Expression::default();
+            if let Some(monetary_threshold_minor) = qt.monetary_threshold_minor {
+                // Threshold spend: sum(price_i * c_{t,i}) >= threshold_t * tier_t
+                let mut contribution_expr = Expression::default();
 
-            for &(item_idx, contribution_var) in &qt.contribution_vars {
-                let item = item_group.get_item(item_idx).map_err(SolverError::from)?;
-                let minor = item.price().to_minor_units();
-                let coeff = i64_to_f64_exact(minor)
-                    .ok_or(SolverError::MinorUnitsNotRepresentable(minor))?;
+                for &(item_idx, contribution_var) in &qt.contribution_vars {
+                    let item = item_group.get_item(item_idx).map_err(SolverError::from)?;
+                    let minor = item.price().to_minor_units();
+                    let coeff = i64_to_f64_exact(minor)
+                        .ok_or(SolverError::MinorUnitsNotRepresentable(minor))?;
 
-                contribution_expr += contribution_var * coeff;
+                    contribution_expr += contribution_var * coeff;
+                }
+
+                let threshold_coeff = i64_to_f64_exact(monetary_threshold_minor).ok_or(
+                    SolverError::MinorUnitsNotRepresentable(monetary_threshold_minor),
+                )?;
+
+                let threshold_expr =
+                    contribution_expr - Expression::from(qt.tier_var) * threshold_coeff;
+
+                observer.on_promotion_constraint(
+                    self.promotion_key,
+                    "threshold spend",
+                    &threshold_expr,
+                    ">=",
+                    0.0,
+                );
+
+                state.add_geq_constraint(threshold_expr, 0.0);
             }
 
-            let threshold_coeff = i64_to_f64_exact(qt.threshold_minor)
-                .ok_or(SolverError::MinorUnitsNotRepresentable(qt.threshold_minor))?;
+            if let Some(item_count_threshold) = qt.item_count_threshold {
+                // Threshold item count: sum(c_{t,i}) >= item_count_t * tier_t
+                let contribution_count_expr: Expression =
+                    qt.contribution_vars.iter().map(|(_, v)| *v).sum();
 
-            let threshold_expr =
-                contribution_expr - Expression::from(qt.tier_var) * threshold_coeff;
+                let item_count_coeff = i64_to_f64_exact(i64::from(item_count_threshold)).ok_or(
+                    SolverError::MinorUnitsNotRepresentable(i64::from(item_count_threshold)),
+                )?;
 
-            observer.on_promotion_constraint(
-                self.promotion_key,
-                "threshold spend",
-                &threshold_expr,
-                ">=",
-                0.0,
-            );
+                let item_count_expr =
+                    contribution_count_expr - Expression::from(qt.tier_var) * item_count_coeff;
 
-            state.add_geq_constraint(threshold_expr, 0.0);
+                observer.on_promotion_constraint(
+                    self.promotion_key,
+                    "threshold item count",
+                    &item_count_expr,
+                    ">=",
+                    0.0,
+                );
+
+                state.add_geq_constraint(item_count_expr, 0.0);
+            }
 
             // Tier activation: tier_t <= sum(d_{t,i})
             // Required for bundle-total discounts to prevent free savings when no
@@ -727,7 +756,11 @@ impl ILPPromotion for TieredThresholdPromotion<'_> {
         let mut qualifying_tiers = Vec::new();
 
         for (tier_idx, tier) in self.tiers().iter().enumerate() {
-            let threshold_minor = tier.threshold().to_minor_units();
+            let monetary_threshold_minor = tier
+                .threshold()
+                .monetary_threshold()
+                .map(Money::to_minor_units);
+            let item_count_threshold = tier.threshold().item_count_threshold();
             let contribution_tags = tier.contribution_tags();
             let match_all_contribution = contribution_tags.is_empty();
             let discount_tags = tier.discount_tags();
@@ -738,10 +771,19 @@ impl ILPPromotion for TieredThresholdPromotion<'_> {
                 .filter(|item| match_all_contribution || item.tags().intersects(contribution_tags))
                 .map(|item| item.price().to_minor_units())
                 .sum();
+            let contribution_count = item_group
+                .iter()
+                .filter(|item| match_all_contribution || item.tags().intersects(contribution_tags))
+                .count();
+            let contribution_count_u32 = u32::try_from(contribution_count).unwrap_or(u32::MAX);
 
-            // Skip tiers that can never meet their threshold even if they claim all
+            // Skip tiers that can never meet their thresholds even if they claim all
             // available contribution items.
-            if contribution_total < threshold_minor {
+            if monetary_threshold_minor.is_some_and(|threshold| contribution_total < threshold) {
+                continue;
+            }
+
+            if item_count_threshold.is_some_and(|threshold| contribution_count_u32 < threshold) {
                 continue;
             }
 
@@ -893,7 +935,8 @@ impl ILPPromotion for TieredThresholdPromotion<'_> {
             };
 
             qualifying_tiers.push(QualifyingTier {
-                threshold_minor,
+                monetary_threshold_minor,
+                item_count_threshold,
                 tier_var,
                 item_vars,
                 contribution_vars,
@@ -967,6 +1010,22 @@ mod tests {
     ) -> ThresholdTier<'a, StringTagCollection> {
         ThresholdTier::new(
             Money::from_minor(threshold_minor, GBP),
+            StringTagCollection::from_strs(contribution_tags),
+            StringTagCollection::from_strs(discount_tags),
+            discount,
+        )
+    }
+
+    fn make_tier_with_tags_and_item_count<'a>(
+        threshold_minor: i64,
+        item_count_threshold: u32,
+        contribution_tags: &[&str],
+        discount_tags: &[&str],
+        discount: ThresholdDiscount<'a>,
+    ) -> ThresholdTier<'a, StringTagCollection> {
+        ThresholdTier::with_item_count_threshold(
+            Money::from_minor(threshold_minor, GBP),
+            item_count_threshold,
             StringTagCollection::from_strs(contribution_tags),
             StringTagCollection::from_strs(discount_tags),
             discount,
@@ -1085,6 +1144,46 @@ mod tests {
 
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
+        let expr = vars.add_item_participation_term(Expression::default(), 0);
+
+        assert!(
+            good_lp::IntoAffineExpression::linear_coefficients(&expr)
+                .next()
+                .is_none()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn add_variables_skips_tier_when_item_count_threshold_unreachable() -> TestResult {
+        let items = [Item::with_tags(
+            ProductKey::default(),
+            Money::from_minor(5000, GBP),
+            StringTagCollection::from_strs(&["wine", "cheese"]),
+        )];
+
+        let item_group = item_group_from_items(items);
+
+        let promo = TieredThresholdPromotion::new(
+            PromotionKey::default(),
+            vec![make_tier_with_tags_and_item_count(
+                1000,
+                2,
+                &["wine"],
+                &["cheese"],
+                ThresholdDiscount::PercentEachItem(Percentage::from(0.10)),
+            )],
+            PromotionBudget::unlimited(),
+        );
+
+        let pb = ProblemVariables::new();
+        let cost = Expression::default();
+
+        let mut state = ILPState::new(pb, cost);
+        let mut observer = NoopObserver;
+
+        let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
         let expr = vars.add_item_participation_term(Expression::default(), 0);
 
         assert!(
@@ -1545,6 +1644,44 @@ mod tests {
     }
 
     #[test]
+    fn item_count_threshold_constraint_is_emitted_when_configured() -> TestResult {
+        let items = [Item::with_tags(
+            ProductKey::default(),
+            Money::from_minor(5000, GBP),
+            StringTagCollection::from_strs(&["wine", "cheese"]),
+        )];
+
+        let item_group = item_group_from_items(items);
+
+        let promo = TieredThresholdPromotion::new(
+            PromotionKey::default(),
+            vec![make_tier_with_tags_and_item_count(
+                1000,
+                1,
+                &["wine"],
+                &["cheese"],
+                ThresholdDiscount::PercentEachItem(Percentage::from(0.10)),
+            )],
+            PromotionBudget::unlimited(),
+        );
+
+        let mut state = ILPState::new(ProblemVariables::new(), Expression::default());
+        let mut observer = RecordingObserver::default();
+
+        let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
+        vars.add_constraints(promo.key(), &item_group, &mut state, &mut observer)?;
+
+        assert!(
+            observer
+                .promotion_constraints
+                .iter()
+                .any(|record| record.constraint_type == "threshold item count")
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn is_applicable_empty_items_even_when_discount_tags_are_empty() {
         let item_group: ItemGroup<'_> = ItemGroup::new(SmallVec::new(), GBP);
 
@@ -1601,7 +1738,8 @@ mod tests {
         let tier_var = state.problem_variables_mut().add(variable().binary());
 
         let bundle_tier = QualifyingTier {
-            threshold_minor: 1000,
+            monetary_threshold_minor: Some(1000),
+            item_count_threshold: None,
             tier_var,
             item_vars: SmallVec::new(),
             contribution_vars: SmallVec::new(),
@@ -1733,7 +1871,8 @@ mod tests {
         let other_var = state.problem_variables_mut().add(variable().binary());
 
         let per_item_tier = QualifyingTier {
-            threshold_minor: 1000,
+            monetary_threshold_minor: Some(1000),
+            item_count_threshold: None,
             tier_var,
             item_vars: SmallVec::new(),
             contribution_vars: SmallVec::new(),
@@ -1954,7 +2093,8 @@ mod tests {
         let t1 = state.problem_variables_mut().add(variable().binary());
 
         let qt = QualifyingTier {
-            threshold_minor: 100,
+            monetary_threshold_minor: Some(100),
+            item_count_threshold: None,
             tier_var,
             item_vars: SmallVec::from_vec(vec![(0, d0), (1, d1)]),
             contribution_vars: SmallVec::new(),
@@ -2074,7 +2214,8 @@ mod tests {
         let t1 = state.problem_variables_mut().add(variable().binary());
 
         let qt = QualifyingTier {
-            threshold_minor: 100,
+            monetary_threshold_minor: Some(100),
+            item_count_threshold: None,
             tier_var,
             item_vars: SmallVec::new(),
             contribution_vars: SmallVec::new(),

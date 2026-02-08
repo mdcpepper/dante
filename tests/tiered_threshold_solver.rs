@@ -128,6 +128,145 @@ fn threshold_not_met_no_discount_applied() -> TestResult {
     Ok(())
 }
 
+/// Item-count threshold not met: no discount applied even when spend threshold is met.
+#[test]
+fn item_count_threshold_not_met_no_discount_applied() -> TestResult {
+    let items = [
+        Item::with_tags(
+            ProductKey::default(),
+            Money::from_minor(1500, GBP),
+            StringTagCollection::from_strs(&["wine"]),
+        ),
+        Item::with_tags(
+            ProductKey::default(),
+            Money::from_minor(1500, GBP),
+            StringTagCollection::from_strs(&["wine"]),
+        ),
+        Item::with_tags(
+            ProductKey::default(),
+            Money::from_minor(500, GBP),
+            StringTagCollection::from_strs(&["cheese"]),
+        ),
+    ];
+
+    let basket = Basket::with_items(items, GBP)?;
+    let item_group = ItemGroup::from(&basket);
+
+    let promo = promotion(TieredThresholdPromotion::new(
+        PromotionKey::default(),
+        vec![ThresholdTier::with_item_count_threshold(
+            Money::from_minor(3000, GBP),
+            3,
+            StringTagCollection::from_strs(&["wine"]),
+            StringTagCollection::from_strs(&["cheese"]),
+            ThresholdDiscount::PercentEachItem(Percentage::from(0.10)),
+        )],
+        PromotionBudget::unlimited(),
+    ));
+
+    let result = ILPSolver::solve(&[promo], &item_group)?;
+
+    // Spend threshold met (£30 on wine), but only 2 contributing items (< 3 required).
+    assert_eq!(result.total.to_minor_units(), 3500);
+    assert_eq!(result.promotion_applications.len(), 0);
+
+    Ok(())
+}
+
+/// Item-count threshold met: discount applies when spend and count requirements are both met.
+#[test]
+fn item_count_threshold_met_applies_discount() -> TestResult {
+    let items = [
+        Item::with_tags(
+            ProductKey::default(),
+            Money::from_minor(1000, GBP),
+            StringTagCollection::from_strs(&["wine"]),
+        ),
+        Item::with_tags(
+            ProductKey::default(),
+            Money::from_minor(1000, GBP),
+            StringTagCollection::from_strs(&["wine"]),
+        ),
+        Item::with_tags(
+            ProductKey::default(),
+            Money::from_minor(1000, GBP),
+            StringTagCollection::from_strs(&["wine"]),
+        ),
+        Item::with_tags(
+            ProductKey::default(),
+            Money::from_minor(500, GBP),
+            StringTagCollection::from_strs(&["cheese"]),
+        ),
+    ];
+
+    let basket = Basket::with_items(items, GBP)?;
+    let item_group = ItemGroup::from(&basket);
+
+    let promo = promotion(TieredThresholdPromotion::new(
+        PromotionKey::default(),
+        vec![ThresholdTier::with_item_count_threshold(
+            Money::from_minor(3000, GBP),
+            3,
+            StringTagCollection::from_strs(&["wine"]),
+            StringTagCollection::from_strs(&["cheese"]),
+            ThresholdDiscount::PercentEachItem(Percentage::from(0.10)),
+        )],
+        PromotionBudget::unlimited(),
+    ));
+
+    let result = ILPSolver::solve(&[promo], &item_group)?;
+
+    // Cheese gets 10% off: 500 -> 450
+    assert_eq!(result.total.to_minor_units(), 3450);
+    assert_eq!(result.promotion_applications.len(), 4);
+
+    Ok(())
+}
+
+/// Item-count-only threshold: discount applies without a monetary threshold.
+#[test]
+fn item_count_only_threshold_met_applies_discount() -> TestResult {
+    let items = [
+        Item::with_tags(
+            ProductKey::default(),
+            Money::from_minor(100, GBP),
+            StringTagCollection::from_strs(&["wine"]),
+        ),
+        Item::with_tags(
+            ProductKey::default(),
+            Money::from_minor(100, GBP),
+            StringTagCollection::from_strs(&["wine"]),
+        ),
+        Item::with_tags(
+            ProductKey::default(),
+            Money::from_minor(500, GBP),
+            StringTagCollection::from_strs(&["cheese"]),
+        ),
+    ];
+
+    let basket = Basket::with_items(items, GBP)?;
+    let item_group = ItemGroup::from(&basket);
+
+    let promo = promotion(TieredThresholdPromotion::new(
+        PromotionKey::default(),
+        vec![ThresholdTier::with_item_count_only_threshold(
+            2,
+            StringTagCollection::from_strs(&["wine"]),
+            StringTagCollection::from_strs(&["cheese"]),
+            ThresholdDiscount::PercentEachItem(Percentage::from(0.10)),
+        )],
+        PromotionBudget::unlimited(),
+    ));
+
+    let result = ILPSolver::solve(&[promo], &item_group)?;
+
+    // Cheese gets 10% off: 500 -> 450
+    assert_eq!(result.total.to_minor_units(), 650);
+    assert_eq!(result.promotion_applications.len(), 3);
+
+    Ok(())
+}
+
 /// Example 2: "Spend £50 get £5 off, spend £80 get £12 off"
 /// Solver picks the best tier that minimises total cost.
 #[test]

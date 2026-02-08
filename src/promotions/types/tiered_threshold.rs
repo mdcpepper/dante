@@ -1,9 +1,10 @@
 //! Tiered Threshold Promotion
 //!
-//! A promotion that checks whether items matching `contribution_tags` meet a spend threshold,
-//! then applies a [`ThresholdDiscount`] to items matching `discount_tags`. Multiple tiers can be
-//! defined (e.g., spend £50 for 5% off, spend £80 for 12% off); the ILP solver selects the
-//! single best tier that minimises total basket cost.
+//! A promotion that checks whether items matching `contribution_tags` meet
+//! threshold requirements, then applies a [`ThresholdDiscount`] to items matching
+//! `discount_tags`. Multiple tiers can be defined (e.g., spend £50 for 5% off,
+//! spend £80 for 12% off); the ILP solver selects the single best tier that
+//! minimises total basket cost.
 
 use decimal_percentage::Percentage;
 use rusty_money::{Money, iso::Currency};
@@ -44,13 +45,61 @@ pub enum ThresholdDiscount<'a> {
     FixedCheapest(Money<'a, Currency>),
 }
 
+/// Threshold requirements for a tier.
+///
+/// A threshold can require spend, item count, or both.
+#[derive(Debug, Clone)]
+pub struct TierThreshold<'a> {
+    monetary_threshold: Option<Money<'a, Currency>>,
+    item_count_threshold: Option<u32>,
+}
+
+impl<'a> TierThreshold<'a> {
+    /// Create a threshold with a monetary requirement only.
+    pub fn with_monetary_threshold(monetary_threshold: Money<'a, Currency>) -> Self {
+        Self {
+            monetary_threshold: Some(monetary_threshold),
+            item_count_threshold: None,
+        }
+    }
+
+    /// Create a threshold with an item-count requirement only.
+    pub const fn with_item_count_threshold(item_count_threshold: u32) -> Self {
+        Self {
+            monetary_threshold: None,
+            item_count_threshold: Some(item_count_threshold),
+        }
+    }
+
+    /// Create a threshold with both monetary and item-count requirements.
+    pub fn with_both_thresholds(
+        monetary_threshold: Money<'a, Currency>,
+        item_count_threshold: u32,
+    ) -> Self {
+        Self {
+            monetary_threshold: Some(monetary_threshold),
+            item_count_threshold: Some(item_count_threshold),
+        }
+    }
+
+    /// Return the optional monetary threshold.
+    pub fn monetary_threshold(&self) -> Option<&Money<'a, Currency>> {
+        self.monetary_threshold.as_ref()
+    }
+
+    /// Return the optional item-count threshold.
+    pub const fn item_count_threshold(&self) -> Option<u32> {
+        self.item_count_threshold
+    }
+}
+
 /// A single threshold tier within a tiered threshold promotion.
 ///
-/// Each tier specifies a spend threshold, which items contribute to that threshold,
-/// which items receive the discount, and what discount is applied.
+/// Each tier specifies threshold requirements, which items contribute to
+/// qualification, which items receive the discount, and what discount applies.
 #[derive(Debug, Clone)]
 pub struct ThresholdTier<'a, T: TagCollection = StringTagCollection> {
-    threshold: Money<'a, Currency>,
+    threshold: TierThreshold<'a>,
     contribution_tags: T,
     discount_tags: T,
     discount: ThresholdDiscount<'a>,
@@ -59,7 +108,53 @@ pub struct ThresholdTier<'a, T: TagCollection = StringTagCollection> {
 impl<'a, T: TagCollection> ThresholdTier<'a, T> {
     /// Create a new threshold tier.
     pub fn new(
-        threshold: Money<'a, Currency>,
+        monetary_threshold: Money<'a, Currency>,
+        contribution_tags: T,
+        discount_tags: T,
+        discount: ThresholdDiscount<'a>,
+    ) -> Self {
+        Self::with_threshold(
+            TierThreshold::with_monetary_threshold(monetary_threshold),
+            contribution_tags,
+            discount_tags,
+            discount,
+        )
+    }
+
+    /// Create a new threshold tier with both spend and item-count requirements.
+    pub fn with_item_count_threshold(
+        monetary_threshold: Money<'a, Currency>,
+        item_count_threshold: u32,
+        contribution_tags: T,
+        discount_tags: T,
+        discount: ThresholdDiscount<'a>,
+    ) -> Self {
+        Self::with_threshold(
+            TierThreshold::with_both_thresholds(monetary_threshold, item_count_threshold),
+            contribution_tags,
+            discount_tags,
+            discount,
+        )
+    }
+
+    /// Create a new threshold tier with an item-count requirement only.
+    pub fn with_item_count_only_threshold(
+        item_count_threshold: u32,
+        contribution_tags: T,
+        discount_tags: T,
+        discount: ThresholdDiscount<'a>,
+    ) -> Self {
+        Self::with_threshold(
+            TierThreshold::with_item_count_threshold(item_count_threshold),
+            contribution_tags,
+            discount_tags,
+            discount,
+        )
+    }
+
+    /// Create a new threshold tier from a validated threshold value object.
+    pub fn with_threshold(
+        threshold: TierThreshold<'a>,
         contribution_tags: T,
         discount_tags: T,
         discount: ThresholdDiscount<'a>,
@@ -72,8 +167,8 @@ impl<'a, T: TagCollection> ThresholdTier<'a, T> {
         }
     }
 
-    /// Return the spend threshold.
-    pub fn threshold(&self) -> &Money<'a, Currency> {
+    /// Return threshold requirements.
+    pub const fn threshold(&self) -> &TierThreshold<'a> {
         &self.threshold
     }
 
@@ -95,9 +190,10 @@ impl<'a, T: TagCollection> ThresholdTier<'a, T> {
 
 /// A tiered threshold promotion.
 ///
-/// Evaluates items against spend thresholds: if items matching `contribution_tags` meet
-/// a tier's threshold, items matching `discount_tags` receive the tier's discount. The ILP
-/// solver picks the single best qualifying tier to minimise total cost.
+/// Evaluates items against tier requirements (spend plus optional item count):
+/// if items matching `contribution_tags` meet a tier's thresholds, items matching
+/// `discount_tags` receive the tier's discount. The ILP solver picks the single
+/// best qualifying tier to minimise total cost.
 #[derive(Debug, Clone)]
 pub struct TieredThresholdPromotion<'a, T: TagCollection = StringTagCollection> {
     key: PromotionKey,
@@ -233,7 +329,8 @@ mod tests {
             promo
                 .tiers()
                 .first()
-                .map(|t| t.threshold().to_minor_units()),
+                .and_then(|t| t.threshold().monetary_threshold())
+                .map(Money::to_minor_units),
             Some(5000)
         );
         assert!(
@@ -248,6 +345,68 @@ mod tests {
                 .first()
                 .is_some_and(|t| t.discount_tags().contains("cheese"))
         );
+        assert_eq!(
+            promo
+                .tiers()
+                .first()
+                .and_then(|t| t.threshold().item_count_threshold()),
+            None
+        );
+    }
+
+    #[test]
+    fn item_count_threshold_accessor_returns_configured_value() {
+        let tier = ThresholdTier::with_item_count_threshold(
+            Money::from_minor(5000, GBP),
+            3,
+            StringTagCollection::from_strs(&["wine"]),
+            StringTagCollection::from_strs(&["cheese"]),
+            ThresholdDiscount::PercentEachItem(Percentage::from(0.10)),
+        );
+
+        assert_eq!(
+            tier.threshold()
+                .monetary_threshold()
+                .map(Money::to_minor_units),
+            Some(5000)
+        );
+        assert_eq!(tier.threshold().item_count_threshold(), Some(3));
+    }
+
+    #[test]
+    fn tier_threshold_constructors_cover_all_supported_shapes() {
+        let monetary_only = TierThreshold::with_monetary_threshold(Money::from_minor(5000, GBP));
+        assert_eq!(
+            monetary_only
+                .monetary_threshold()
+                .map(Money::to_minor_units),
+            Some(5000)
+        );
+        assert_eq!(monetary_only.item_count_threshold(), None);
+
+        let item_count_only = TierThreshold::with_item_count_threshold(3);
+        assert_eq!(item_count_only.monetary_threshold(), None);
+        assert_eq!(item_count_only.item_count_threshold(), Some(3));
+
+        let both = TierThreshold::with_both_thresholds(Money::from_minor(5000, GBP), 3);
+        assert_eq!(
+            both.monetary_threshold().map(Money::to_minor_units),
+            Some(5000)
+        );
+        assert_eq!(both.item_count_threshold(), Some(3));
+    }
+
+    #[test]
+    fn item_count_only_threshold_constructor_sets_count_without_monetary() {
+        let tier = ThresholdTier::with_item_count_only_threshold(
+            3,
+            StringTagCollection::from_strs(&["wine"]),
+            StringTagCollection::from_strs(&["cheese"]),
+            ThresholdDiscount::PercentEachItem(Percentage::from(0.10)),
+        );
+
+        assert_eq!(tier.threshold().monetary_threshold(), None);
+        assert_eq!(tier.threshold().item_count_threshold(), Some(3));
     }
 
     #[test]

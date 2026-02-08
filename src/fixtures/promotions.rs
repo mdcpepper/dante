@@ -17,7 +17,7 @@ use crate::{
         promotion,
         types::{
             DirectDiscountPromotion, MixAndMatchDiscount, MixAndMatchPromotion, MixAndMatchSlot,
-            PositionalDiscountPromotion, ThresholdDiscount, ThresholdTier,
+            PositionalDiscountPromotion, ThresholdDiscount, ThresholdTier, TierThreshold,
             TieredThresholdPromotion,
         },
     },
@@ -291,25 +291,57 @@ fn convert_tiered_threshold(
     let tier_defs: Vec<ThresholdTier<'static>> = tiers
         .into_iter()
         .map(|tier_fixture| {
-            let (threshold_minor, threshold_currency) = parse_price(&tier_fixture.threshold)?;
+            let ThresholdTierFixture {
+                threshold,
+                contribution_tags,
+                discount_tags,
+                discount,
+            } = tier_fixture;
 
-            let contribution_tag_refs: Vec<&str> = tier_fixture
-                .contribution_tags
-                .iter()
-                .map(String::as_str)
-                .collect();
+            let threshold = threshold.unwrap_or_default();
 
-            let discount_tag_refs: Vec<&str> = tier_fixture
-                .discount_tags
-                .iter()
-                .map(String::as_str)
-                .collect();
+            let monetary_threshold = threshold
+                .monetary
+                .map(|monetary| parse_price(&monetary))
+                .transpose()?
+                .map(|(threshold_minor, threshold_currency)| {
+                    Money::from_minor(threshold_minor, threshold_currency)
+                });
 
-            Ok(ThresholdTier::new(
-                Money::from_minor(threshold_minor, threshold_currency),
-                StringTagCollection::from_strs(&contribution_tag_refs),
-                StringTagCollection::from_strs(&discount_tag_refs),
-                ThresholdDiscount::try_from(tier_fixture.discount)?,
+            let item_count_threshold = threshold.items;
+
+            let contribution_tag_refs: Vec<&str> =
+                contribution_tags.iter().map(String::as_str).collect();
+
+            let discount_tag_refs: Vec<&str> = discount_tags.iter().map(String::as_str).collect();
+
+            let threshold = match (monetary_threshold, item_count_threshold) {
+                (Some(monetary_threshold), Some(item_count_threshold)) => {
+                    TierThreshold::with_both_thresholds(monetary_threshold, item_count_threshold)
+                }
+                (Some(monetary_threshold), None) => {
+                    TierThreshold::with_monetary_threshold(monetary_threshold)
+                }
+                (None, Some(item_count_threshold)) => {
+                    TierThreshold::with_item_count_threshold(item_count_threshold)
+                }
+                (None, None) => {
+                    return Err(FixtureError::InvalidPromotionData(
+                        "tier threshold must define threshold.monetary and/or threshold.items"
+                            .to_string(),
+                    ));
+                }
+            };
+
+            let contribution_tags = StringTagCollection::from_strs(&contribution_tag_refs);
+            let discount_tags = StringTagCollection::from_strs(&discount_tag_refs);
+            let discount = ThresholdDiscount::try_from(discount)?;
+
+            Ok(ThresholdTier::with_threshold(
+                threshold,
+                contribution_tags,
+                discount_tags,
+                discount,
             ))
         })
         .collect::<Result<Vec<_>, FixtureError>>()?;
@@ -322,8 +354,9 @@ fn convert_tiered_threshold(
 /// Threshold tier definition from YAML fixtures
 #[derive(Debug, Deserialize)]
 pub struct ThresholdTierFixture {
-    /// Spend threshold (e.g., "30.00 GBP")
-    pub threshold: String,
+    /// Tier threshold requirements.
+    #[serde(default)]
+    pub threshold: Option<ThresholdRequirementsFixture>,
 
     /// Tags for items that contribute to the threshold
     #[serde(default)]
@@ -335,6 +368,18 @@ pub struct ThresholdTierFixture {
 
     /// Discount configuration
     pub discount: ThresholdDiscountFixture,
+}
+
+/// Threshold requirements from YAML fixtures.
+#[derive(Debug, Default, Deserialize)]
+pub struct ThresholdRequirementsFixture {
+    /// Optional spend threshold (e.g., "30.00 GBP")
+    #[serde(default)]
+    pub monetary: Option<String>,
+
+    /// Optional minimum number of contributing items required.
+    #[serde(default)]
+    pub items: Option<u32>,
 }
 
 /// Simple Discount configuration from YAML fixtures
@@ -971,6 +1016,7 @@ value: 0.10
 
         let key = test_promotion_key();
         let (_meta, promotion) = fixture.try_into_promotion(key)?;
+
         assert_eq!(promotion.key(), key);
 
         Ok(())
@@ -994,6 +1040,7 @@ value: 0.10
 
         let key = test_promotion_key();
         let (_meta, promotion) = fixture.try_into_promotion(key)?;
+
         assert_eq!(promotion.key(), key);
 
         Ok(())
@@ -1004,7 +1051,10 @@ value: 0.10
         let fixture = PromotionFixture::TieredThreshold {
             name: "Wine & Cheese Deal".to_string(),
             tiers: vec![ThresholdTierFixture {
-                threshold: "30.00 GBP".to_string(),
+                threshold: Some(ThresholdRequirementsFixture {
+                    monetary: Some("30.00 GBP".to_string()),
+                    items: None,
+                }),
                 contribution_tags: vec!["wine".to_string()],
                 discount_tags: vec!["cheese".to_string()],
                 discount: ThresholdDiscountFixture::PercentEachItem {
@@ -1028,7 +1078,10 @@ value: 0.10
         let fixture = PromotionFixture::TieredThreshold {
             name: "Tiered with Budget".to_string(),
             tiers: vec![ThresholdTierFixture {
-                threshold: "50.00 GBP".to_string(),
+                threshold: Some(ThresholdRequirementsFixture {
+                    monetary: Some("50.00 GBP".to_string()),
+                    items: None,
+                }),
                 contribution_tags: vec![],
                 discount_tags: vec![],
                 discount: ThresholdDiscountFixture::AmountOffEachItem {
@@ -1043,6 +1096,7 @@ value: 0.10
 
         let key = test_promotion_key();
         let (_meta, promotion) = fixture.try_into_promotion(key)?;
+
         assert_eq!(promotion.key(), key);
 
         Ok(())
@@ -1054,13 +1108,15 @@ value: 0.10
 type: tiered_threshold
 name: Spend & Save
 tiers:
-  - threshold: '50.00 GBP'
+  - threshold:
+      monetary: '50.00 GBP'
     contribution_tags: []
     discount_tags: []
     discount:
       type: amount_off_each_item
       amount: '5.00 GBP'
-  - threshold: '80.00 GBP'
+  - threshold:
+      monetary: '80.00 GBP'
     contribution_tags: []
     discount_tags: []
     discount:
@@ -1079,12 +1135,87 @@ tiers:
     }
 
     #[test]
+    fn tiered_threshold_fixture_supports_item_count_threshold() -> TestResult {
+        let yaml = r"
+type: tiered_threshold
+name: Spend & Count
+tiers:
+  - threshold:
+      monetary: '20.00 GBP'
+      items: 3
+    contribution_tags: []
+    discount_tags: []
+    discount:
+      type: percent_each_item
+      amount: '10%'
+";
+        let fixture: PromotionFixture = serde_norway::from_str(yaml)?;
+
+        let key = test_promotion_key();
+        let (meta, promotion) = fixture.try_into_promotion(key)?;
+
+        assert_eq!(meta.name, "Spend & Count");
+        assert_eq!(promotion.key(), key);
+
+        Ok(())
+    }
+
+    #[test]
+    fn tiered_threshold_fixture_supports_item_count_only_threshold() -> TestResult {
+        let yaml = r"
+type: tiered_threshold
+name: Count Only
+tiers:
+  - threshold:
+      items: 3
+    contribution_tags: []
+    discount_tags: []
+    discount:
+      type: percent_each_item
+      amount: '10%'
+";
+        let fixture: PromotionFixture = serde_norway::from_str(yaml)?;
+
+        let key = test_promotion_key();
+        let (meta, promotion) = fixture.try_into_promotion(key)?;
+
+        assert_eq!(meta.name, "Count Only");
+        assert_eq!(promotion.key(), key);
+
+        Ok(())
+    }
+
+    #[test]
+    fn tiered_threshold_fixture_rejects_empty_threshold_definition() {
+        let yaml = r"
+type: tiered_threshold
+name: Empty Threshold
+tiers:
+  - contribution_tags: []
+    discount_tags: []
+    discount:
+      type: percent_each_item
+      amount: '10%'
+";
+        let fixture: Result<PromotionFixture, _> = serde_norway::from_str(yaml);
+        let Ok(fixture) = fixture else {
+            panic!("Fixture YAML should parse before semantic validation");
+        };
+
+        let key = test_promotion_key();
+        let result = fixture.try_into_promotion(key);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn tiered_threshold_fixture_rejects_unknown_tier_discount_type() {
         let yaml = r"
 type: tiered_threshold
 name: Bad Tier
 tiers:
-  - threshold: '50.00 GBP'
+  - threshold:
+      monetary: '50.00 GBP'
     contribution_tags: []
     discount_tags: []
     discount:
@@ -1092,6 +1223,7 @@ tiers:
       amount: '5.00'
 ";
         let result: Result<PromotionFixture, _> = serde_norway::from_str(yaml);
+
         assert!(result.is_err());
     }
 }

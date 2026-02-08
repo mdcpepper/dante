@@ -178,26 +178,30 @@ cargo run --release --example basket -- -f mix-and-match -n 5
 
 ### Tiered Threshold Promotions
 
-Tiered Threshold promotions define multiple spend thresholds, where each tier can use different contribution tags, discount tags, and discount types. If multiple tiers qualify, the solver selects the single tier that gives the cheapest final basket total.
+Tiered Threshold promotions define multiple spend thresholds, where each tier can use different contribution tags, discount tags, and discount types. Tiers define threshold requirements under `threshold`, with optional `monetary` and `items` fields. If multiple tiers qualify, the solver selects the single tier that gives the cheapest final basket total.
 
 ```yaml
 multi-tier-basket-discount:
   type: tiered_threshold
   name: Multi-Tier Basket Discount
   tiers:
-    - threshold: "30.00 GBP"
+    - threshold:
+        monetary: "30.00 GBP"
       contribution_tags: []
       discount_tags: []
       discount:
         type: amount_off_each_item
         amount: "0.50 GBP"
-    - threshold: "45.00 GBP"
+    - threshold:
+        monetary: "45.00 GBP"
+        items: 4
       contribution_tags: []
       discount_tags: []
       discount:
         type: percent_each_item
         amount: "10%"
-    - threshold: "60.00 GBP"
+    - threshold:
+        monetary: "60.00 GBP"
       contribution_tags: []
       discount_tags: []
       discount:
