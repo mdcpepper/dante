@@ -10,7 +10,7 @@ use std::{fs::create_dir_all, io, io::Write, path::PathBuf, time::Instant};
 
 use anyhow::Result;
 use clap::Parser;
-use humanize_duration::{Truncate, prelude::DurationExt};
+use humanize_duration::{prelude::DurationExt, Truncate};
 
 use lattice::{
     fixtures::Fixture, items::groups::ItemGroup, receipt::Receipt,
