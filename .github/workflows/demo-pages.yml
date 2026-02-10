@@ -47,6 +47,8 @@ jobs:
 
       - name: Build demo (release)
         working-directory: crates/demo
+        env:
+          TRUNK_PROFILE: release
         run: trunk build --release --dist dist --public-url "${{ steps.pages.outputs.base_path }}"
 
       - name: Upload Pages artifact

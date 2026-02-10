@@ -1,0 +1,119 @@
+.app-shell {
+    min-height: 100vh;
+    padding: var(--space-layout-page-block) var(--space-layout-page-inline);
+    background: var(--color-slate-50);
+    color: var(--color-slate-900);
+}
+
+.app-frame {
+    width: min(100%, var(--app-max-width));
+    margin-inline: auto;
+}
+
+.app-header {
+    margin-bottom: var(--space-layout-section-gap);
+}
+
+.app-title {
+    margin: 0;
+    font-size: var(--step-1);
+    line-height: 2rem;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+}
+
+.app-layout {
+    display: grid;
+    gap: var(--app-content-gap);
+    grid-template-columns: repeat(
+        auto-fit,
+        minmax(min(100%, var(--panel-min-width)), 1fr)
+    );
+    align-items: start;
+}
+
+.products-panel,
+.basket-panel {
+    min-width: 0;
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-layout-title-gap);
+    margin-bottom: var(--space-layout-title-gap);
+}
+
+.panel-title {
+    margin: 0;
+    font-size: var(--step-0);
+    line-height: 1.75rem;
+    font-weight: 600;
+}
+
+.panel-title-spaced {
+    margin-bottom: var(--space-layout-title-gap);
+}
+
+.panel-title-offset,
+.panel-title-leading {
+    padding-left: var(--space-layout-title-offset);
+}
+
+.basket-title-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-layout-subtle-gap);
+}
+
+.basket-title-icon {
+    width: var(--space-s);
+    height: var(--space-s);
+    flex-shrink: 0;
+}
+
+.panel-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-layout-panel-gap);
+}
+
+.panel-title-trailing {
+    padding-right: var(--space-layout-title-offset);
+    text-align: right;
+}
+
+.panel-card {
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--size-radius-card);
+    background: white;
+    padding: var(--space-layout-panel-pad);
+    box-shadow: 0 1px 2px 0 var(--color-shadow);
+}
+
+.products-list,
+.basket-lines {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: var(--space-layout-panel-gap);
+}
+
+.panel-meta {
+    margin: var(--space-layout-meta-top) 0 0;
+    width: 100%;
+    padding-right: var(--space-layout-control-gap);
+    text-align: right;
+    font-size: var(--step--2);
+    line-height: 1rem;
+    color: var(--color-slate-400);
+}
+
+.panel-spinner {
+    display: inline-flex;
+    color: var(--color-slate-500);
+    animation: spin 1s linear infinite;
+}
+

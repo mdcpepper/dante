@@ -1,0 +1,78 @@
+:root {
+    /* @link https://utopia.fyi/type/calculator?c=360,18,1.2,1240,20,1.25,5,2,&s=0.75|0.5|0.25,1.5|2|3|4|6,s-l&g=s,l,xl,12 */
+    --step--2: clamp(0.7813rem, 0.7736rem + 0.0341vw, 0.8rem);
+    --step--1: clamp(0.9375rem, 0.9119rem + 0.1136vw, 1rem);
+    --step-0: clamp(1.125rem, 1.0739rem + 0.2273vw, 1.25rem);
+    --step-1: clamp(1.35rem, 1.2631rem + 0.3864vw, 1.5625rem);
+    --step-2: clamp(1.62rem, 1.4837rem + 0.6057vw, 1.9531rem);
+    --step-3: clamp(1.944rem, 1.7405rem + 0.9044vw, 2.4414rem);
+    --step-4: clamp(2.3328rem, 2.0387rem + 1.3072vw, 3.0518rem);
+    --step-5: clamp(2.7994rem, 2.384rem + 1.8461vw, 3.8147rem);
+
+    /* @link https://utopia.fyi/space/calculator?c=360,18,1.2,1240,20,1.25,5,2,&s=0.75|0.5|0.25,1.5|2|3|4|6,s-l&g=s,l,xl,12 */
+    --space-3xs: clamp(0.3125rem, 0.3125rem + 0vw, 0.3125rem);
+    --space-2xs: clamp(0.5625rem, 0.5369rem + 0.1136vw, 0.625rem);
+    --space-xs: clamp(0.875rem, 0.8494rem + 0.1136vw, 0.9375rem);
+    --space-s: clamp(1.125rem, 1.0739rem + 0.2273vw, 1.25rem);
+    --space-m: clamp(1.6875rem, 1.6108rem + 0.3409vw, 1.875rem);
+    --space-l: clamp(2.25rem, 2.1477rem + 0.4545vw, 2.5rem);
+    --space-xl: clamp(3.375rem, 3.2216rem + 0.6818vw, 3.75rem);
+    --space-2xl: clamp(4.5rem, 4.2955rem + 0.9091vw, 5rem);
+    --space-3xl: clamp(6.75rem, 6.4432rem + 1.3636vw, 7.5rem);
+    --space-3xs-2xs: clamp(0.3125rem, 0.1847rem + 0.5682vw, 0.625rem);
+    --space-2xs-xs: clamp(0.5625rem, 0.4091rem + 0.6818vw, 0.9375rem);
+    --space-xs-s: clamp(0.875rem, 0.7216rem + 0.6818vw, 1.25rem);
+    --space-s-m: clamp(1.125rem, 0.8182rem + 1.3636vw, 1.875rem);
+    --space-m-l: clamp(1.6875rem, 1.3551rem + 1.4773vw, 2.5rem);
+    --space-l-xl: clamp(2.25rem, 1.6364rem + 2.7273vw, 3.75rem);
+    --space-xl-2xl: clamp(3.375rem, 2.7102rem + 2.9545vw, 5rem);
+    --space-2xl-3xl: clamp(4.5rem, 3.2727rem + 5.4545vw, 7.5rem);
+
+    --space-layout-page-block: var(--space-s-m);
+    --space-layout-page-inline: var(--space-xs-s);
+    --space-layout-section-gap: var(--space-s-m);
+    --space-layout-panel-gap: var(--space-2xs-xs);
+    --space-layout-panel-pad: var(--space-xs-s);
+    --space-layout-title-gap: var(--space-2xs);
+    --space-layout-title-offset: var(--space-xs-s);
+    --space-layout-control-gap: var(--space-2xs);
+    --space-layout-row-gap: var(--space-2xs-xs);
+    --space-layout-row-pad-y: var(--space-2xs);
+    --space-layout-row-pad-x: var(--space-2xs-xs);
+    --space-layout-meta-top: var(--space-3xs);
+    --space-layout-summary-top: var(--space-xs-s);
+    --space-layout-summary-pad-top: var(--space-2xs-xs);
+    --space-layout-subtle-top: var(--space-3xs);
+    --space-layout-subtle-gap: var(--space-3xs);
+    --space-layout-indent: var(--space-2xs);
+    --space-layout-pill-pad-y: calc(var(--space-3xs) / 2);
+    --space-layout-pill-pad-x: var(--space-2xs);
+    --space-layout-button-pad-y: var(--space-3xs);
+    --space-layout-button-pad-x: var(--space-2xs);
+    --space-layout-button-pad-x-wide: var(--space-2xs-xs);
+
+    --size-radius-card: var(--space-2xs);
+    --size-radius-control: var(--space-3xs-2xs);
+
+    --app-max-width: 64rem;
+    --app-content-gap: var(--space-layout-section-gap);
+
+    --panel-min-width: 20rem;
+
+    --color-slate-50: #f8fafc;
+    --color-slate-100: #f1f5f9;
+    --color-slate-200: #e2e8f0;
+    --color-slate-300: #cbd5e1;
+    --color-slate-400: #94a3b8;
+    --color-slate-500: #64748b;
+    --color-slate-600: #475569;
+    --color-slate-700: #334155;
+    --color-slate-900: #0f172a;
+    --color-emerald-50: #ecfdf5;
+    --color-emerald-300: #6ee7b7;
+    --color-emerald-700: #047857;
+    --color-red-50: #fef2f2;
+    --color-red-200: #fecaca;
+    --color-red-700: #b91c1c;
+    --color-shadow: rgb(15 23 42 / 0.05);
+}

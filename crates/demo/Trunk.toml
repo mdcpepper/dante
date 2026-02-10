@@ -1,0 +1,13 @@
+[[hooks]]
+stage = "pre_build"
+command = "cargo"
+command_arguments = [
+  "run",
+  "-p",
+  "lattice-css-build",
+  "--",
+  "--input",
+  "app.src.css",
+  "--output",
+  "app.css",
+]
