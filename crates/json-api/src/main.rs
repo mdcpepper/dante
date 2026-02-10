@@ -2,12 +2,14 @@
 
 use std::process;
 
-use salvo::oapi::{OpenApi, swagger_ui::SwaggerUi};
-use salvo::prelude::*;
+use salvo::{
+    oapi::{OpenApi, swagger_ui::SwaggerUi},
+    prelude::*,
+    trailing_slash::remove_slash,
+};
 use tracing_subscriber::EnvFilter;
 
-use crate::config::ServerConfig;
-use crate::handlers::healthcheck;
+use crate::{config::ServerConfig, handlers::healthcheck};
 
 mod config;
 mod handlers;
@@ -48,6 +50,7 @@ pub async fn main() {
     // Create router
     let router = Router::new()
         .hoop(CatchPanic::new())
+        .hoop(remove_slash())
         .push(Router::with_path("healthcheck").get(healthcheck::handler));
 
     // Create OpenAPI documentation
