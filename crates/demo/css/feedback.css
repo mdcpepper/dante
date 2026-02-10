@@ -1,0 +1,14 @@
+.app-error {
+    width: min(100%, 48rem);
+    border: 1px solid var(--color-red-200);
+    border-radius: var(--size-radius-card);
+    background: var(--color-red-50);
+    padding: var(--space-layout-panel-pad);
+}
+
+.error-text {
+    margin: 0;
+    font-size: var(--step--1);
+    line-height: 1.25rem;
+    color: var(--color-red-700);
+}

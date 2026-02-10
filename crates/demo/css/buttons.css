@@ -1,0 +1,50 @@
+.icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+    border-radius: var(--size-radius-control);
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 150ms ease;
+}
+
+.icon-button-primary {
+    background: var(--color-slate-900);
+    color: white;
+}
+
+.icon-button-primary:hover {
+    background: var(--color-slate-700);
+}
+
+.icon-button-secondary {
+    border-color: var(--color-slate-300);
+    color: var(--color-slate-700);
+    background: transparent;
+}
+
+.icon-button-secondary:hover {
+    background: var(--color-slate-100);
+}
+
+.icon-button-product {
+    padding: var(--space-layout-button-pad-y)
+        var(--space-layout-button-pad-x-wide);
+    font-size: var(--step--1);
+    line-height: 1.25rem;
+}
+
+.icon-button-compact {
+    padding: var(--space-layout-button-pad-y) var(--space-layout-button-pad-x);
+    font-size: var(--step--2);
+    line-height: 1rem;
+}
+
+.icon-button:focus-visible,
+.basket-savings-summary:focus-visible {
+    outline: none;
+    box-shadow:
+        0 0 0 2px var(--color-slate-500),
+        0 0 0 4px white;
+}
