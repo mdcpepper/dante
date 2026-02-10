@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/core", "crates/demo", "crates/css-build"]
+members = ["crates/core", "crates/json-api", "crates/demo", "crates/css-build"]
 
 [workspace.dependencies]
 petgraph = "0.8.3"
