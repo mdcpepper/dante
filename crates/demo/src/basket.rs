@@ -84,10 +84,10 @@ struct BasketViewModel {
     solve_duration: String,
 }
 
-fn solve_basket(
+fn build_basket(
     solver_data: &BasketSolverData,
     cart_fixture_keys: &[String],
-) -> Result<BasketViewModel, String> {
+) -> Result<Basket<'static>, String> {
     let mut basket_items: Vec<Item<'static>> = Vec::new();
 
     for fixture_key in cart_fixture_keys {
@@ -109,8 +109,34 @@ fn solve_basket(
         ));
     }
 
-    let basket = Basket::with_items(basket_items, solver_data.currency)
-        .map_err(|error| format!("Failed to build basket: {error}"))?;
+    Basket::with_items(basket_items, solver_data.currency)
+        .map_err(|error| format!("Failed to build basket: {error}"))
+}
+
+/// Solve only the basket total (minor units) for marginal-price estimation.
+///
+/// # Errors
+///
+/// Returns an error if basket construction or graph solving fails.
+pub fn solve_total_minor(
+    solver_data: &BasketSolverData,
+    cart_fixture_keys: &[String],
+) -> Result<i64, String> {
+    let basket = build_basket(solver_data, cart_fixture_keys)?;
+    let item_group = ItemGroup::from(&basket);
+    let solved = solver_data
+        .graph
+        .evaluate(&item_group)
+        .map_err(|error| format!("Failed to solve promotion graph: {error}"))?;
+
+    Ok(solved.total.to_minor_units())
+}
+
+fn solve_basket(
+    solver_data: &BasketSolverData,
+    cart_fixture_keys: &[String],
+) -> Result<BasketViewModel, String> {
+    let basket = build_basket(solver_data, cart_fixture_keys)?;
 
     let item_group = ItemGroup::from(&basket);
 

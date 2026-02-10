@@ -1166,12 +1166,15 @@ version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
  "humanize-duration",
+ "js-sys",
  "lattice",
  "leptos",
  "petgraph",
  "rusty-money",
  "serde_norway",
  "slotmap",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 

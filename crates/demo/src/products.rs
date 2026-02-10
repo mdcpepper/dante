@@ -20,6 +20,22 @@ pub struct ProductListItem {
 
     /// Display price.
     pub price: String,
+
+    /// Shelf price in minor units.
+    pub price_minor: i64,
+
+    /// Currency code for this product.
+    pub currency_code: &'static str,
+}
+
+/// Estimated marginal basket effect of adding a product.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProductEstimate {
+    /// Delta in basket total after adding one unit.
+    pub marginal_minor: i64,
+
+    /// Savings relative to shelf price (`shelf - marginal`).
+    pub savings_minor: i64,
 }
 
 /// Loaded product fixture data needed by the app.
@@ -73,6 +89,8 @@ pub fn load_products(yaml: &str) -> Result<LoadedProducts, String> {
             fixture_key: fixture_key.clone(),
             name: display_name,
             price: format_price(minor_units, parsed_currency.iso_alpha_code),
+            price_minor: minor_units,
+            currency_code: parsed_currency.iso_alpha_code,
         });
 
         product_key_by_fixture_key.insert(fixture_key, product_key);
@@ -108,65 +126,171 @@ pub fn format_price(minor_units: i64, currency_code: &str) -> String {
     }
 }
 
+#[component]
+fn PriceSummary(impact_price: String, shelf_price: Option<String>) -> impl IntoView {
+    view! {
+        <div class="flex items-center gap-2">
+            {shelf_price.map_or_else(
+                || ().into_any(),
+                |value| {
+                    view! {
+                        <span class="text-xs text-slate-500">
+                            <span class="sr-only">"Was "</span>
+                            <del>{value}</del>
+                        </span>
+                    }
+                    .into_any()
+                },
+            )}
+            <span class="text-sm font-medium text-slate-700">{impact_price}</span>
+        </div>
+    }
+}
+
+#[component]
+fn ProductsHeading(show_spinner: RwSignal<bool>) -> impl IntoView {
+    view! {
+        <div class="mb-4 flex items-center gap-2">
+            <h2 class="text-lg font-semibold">"Products"</h2>
+            {move || {
+                if show_spinner.get() {
+                    view! {
+                        <span class="inline-flex animate-spin text-slate-500" aria-live="polite">
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="lucide lucide-loader-circle-icon lucide-loader-circle"
+                                aria-hidden="true"
+                            >
+                                <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                            </svg>
+                            <span class="sr-only">"Updating product prices"</span>
+                        </span>
+                    }
+                        .into_any()
+                } else {
+                    ().into_any()
+                }
+            }}
+        </div>
+    }
+}
+
+#[component]
+fn SavingsLine(text: Option<String>) -> impl IntoView {
+    let (classes, value) = match text {
+        Some(value) => ("min-h-4 text-xs text-emerald-700", value),
+        None => ("min-h-4 text-xs text-emerald-700 invisible", String::new()),
+    };
+
+    view! {
+        <p class=classes>{value}</p>
+    }
+}
+
 /// Products panel component.
 #[component]
 pub fn ProductsPanel(
     products: Arc<Vec<ProductListItem>>,
     cart_items: RwSignal<Vec<String>>,
     action_message: RwSignal<Option<String>>,
+    estimates: RwSignal<HashMap<String, ProductEstimate>>,
+    show_spinner: RwSignal<bool>,
 ) -> impl IntoView {
     let products = Arc::unwrap_or_clone(products);
 
     view! {
         <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 class="mb-4 text-lg font-semibold">"Products"</h2>
+            <ProductsHeading show_spinner=show_spinner />
             <ul class="space-y-3">
-                {products
+                {move || {
+                    let estimate_map = estimates.get();
+
+                    products
                     .iter()
                     .map(|product| {
                         let item_name = product.name.clone();
                         let product_name = item_name.clone();
                         let announce_name = item_name.clone();
                         let price = product.price.clone();
-                        let add_button_label = format!("Add {item_name} ({price}) to basket");
+                        let estimate = estimate_map.get(&product.fixture_key).copied();
+
+                        let impact_price = estimate.map_or_else(
+                            || price.clone(),
+                            |value| format_price(value.marginal_minor, product.currency_code),
+                        );
+
+                        let show_shelf_price =
+                            estimate.is_some_and(|value| value.marginal_minor != product.price_minor);
+                        let shelf_price = show_shelf_price.then(|| price.clone());
+
+                        let savings_text = estimate.and_then(|value| {
+                            (value.savings_minor > 0).then(|| {
+                                format!(
+                                    "Save {}",
+                                    format_price(value.savings_minor, product.currency_code)
+                                )
+                            })
+                        });
+
+                        let add_button_label = estimate.map_or_else(
+                            || format!("Add {item_name} ({price}) to basket"),
+                            |value| {
+                                format!(
+                                    "Add {item_name}. Basket impact {}.",
+                                    format_price(value.marginal_minor, product.currency_code)
+                                )
+                            },
+                        );
                         let fixture_key = product.fixture_key.clone();
 
                         view! {
                             <li class="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2">
                                 <div class="min-w-0">
                                     <p class="truncate text-sm font-medium">{product_name}</p>
-                                    <p class="text-sm text-slate-600">{price}</p>
+                                    <SavingsLine text=savings_text />
                                 </div>
-                                <button
-                                    type="button"
-                                    aria-label=add_button_label
-                                    class="shrink-0 rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-                                    on:click=move |_| {
-                                        cart_items.update(|items| items.push(fixture_key.clone()));
-                                        action_message
-                                            .set(Some(format!("Added {announce_name} to basket.")));
-                                    }
-                                >
-                                    <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        width="24"
-                                        height="24"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        stroke-width="2"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        class="lucide lucide-plus-icon lucide-plus"
+                                <div class="flex shrink-0 items-center gap-2">
+                                    <PriceSummary impact_price=impact_price shelf_price=shelf_price />
+                                    <button
+                                        type="button"
+                                        aria-label=add_button_label
+                                        class="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                                        on:click=move |_| {
+                                            cart_items.update(|items| items.push(fixture_key.clone()));
+                                            action_message
+                                                .set(Some(format!("Added {announce_name} to basket.")));
+                                        }
                                     >
-                                        <path d="M5 12h14"></path>
-                                        <path d="M12 5v14"></path>
-                                    </svg>
-                                </button>
+                                        <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            width="24"
+                                            height="24"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="2"
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            class="lucide lucide-plus-icon lucide-plus"
+                                        >
+                                            <path d="M5 12h14"></path>
+                                            <path d="M12 5v14"></path>
+                                        </svg>
+                                    </button>
+                                </div>
                             </li>
                         }
                     })
-                    .collect_view()}
+                    .collect_view()
+                }}
             </ul>
         </section>
     }

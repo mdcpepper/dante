@@ -14,6 +14,11 @@ serde_norway.workspace = true
 slotmap.workspace = true
 web-sys = { version = "0.3.85", features = ["Performance", "Window"] }
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+
 [lints.rust]
 missing_debug_implementations = "warn"
 rust_2018_idioms = { level = "warn", priority = -1 }
