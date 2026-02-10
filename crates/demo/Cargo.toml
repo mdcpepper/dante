@@ -8,6 +8,7 @@ console_error_panic_hook = "0.1.7"
 humanize-duration = "0.0.7"
 leptos = { version = "0.8.15", features = ["csr"] }
 lattice = { path = "../core" }
+petgraph.workspace = true
 rusty-money.workspace = true
 serde_norway.workspace = true
 slotmap.workspace = true

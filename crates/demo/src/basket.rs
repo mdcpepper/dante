@@ -19,10 +19,7 @@ use lattice::{
     receipt::Receipt,
 };
 
-use crate::{
-    products::format_price,
-    promotions::{PromotionPill, bundle_pill_style},
-};
+use crate::promotions::{PromotionPill, bundle_pill_style};
 
 /// Solver inputs required to build basket/receipt view state.
 #[derive(Debug)]
@@ -186,13 +183,13 @@ fn solve_basket(
         lines,
         subtotal: format_money(&receipt.subtotal()),
         total: format_money(&receipt.total()),
-        savings: format_money(&savings),
+        savings: format!("-{}", format_money(&savings)),
         solve_duration: format!("{}", solve_elapsed.human(Truncate::Nano)),
     })
 }
 
 fn format_money(money: &Money<'_, Currency>) -> String {
-    format_price(money.to_minor_units(), money.currency().iso_alpha_code)
+    format!("{money}")
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -212,6 +209,171 @@ fn elapsed_since(start_ms: f64) -> Duration {
 
 /// Basket panel component.
 #[component]
+fn BasketSummary(subtotal: String, savings: String, total: String) -> impl IntoView {
+    view! {
+        <div class="mt-4 space-y-1 border-t border-slate-200 pt-3 text-sm">
+            <p class="flex items-center justify-between">
+                <span class="text-slate-600">"Subtotal"</span>
+                <span>{subtotal}</span>
+            </p>
+            <p class="flex items-center justify-between">
+                <span class="text-slate-600">"Savings"</span>
+                <span>{savings}</span>
+            </p>
+            <p class="flex items-center justify-between font-semibold">
+                <span>"Total"</span>
+                <span>{total}</span>
+            </p>
+        </div>
+    }
+}
+
+#[component]
+fn BasketLine(line: BasketLineItem, cart_items: RwSignal<Vec<String>>) -> impl IntoView {
+    let basket_index = line.basket_index;
+    let fixture_key = line.fixture_key.clone();
+    let has_discount = line.base_price != line.final_price;
+    let promotion_pills = line.promotions;
+
+    view! {
+        <li>
+            <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-3">
+                        <p class="min-w-0 flex-1 truncate text-sm font-medium">{line.name}</p>
+                        <div class="shrink-0 text-right">
+                            {if has_discount {
+                                view! {
+                                    <span class="mr-2 text-xs text-slate-500 line-through">{line.base_price}</span>
+                                }
+                                    .into_any()
+                            } else {
+                                ().into_any()
+                            }}
+                            <span class="text-sm text-slate-700">{line.final_price}</span>
+                        </div>
+                    </div>
+                    {if promotion_pills.is_empty() {
+                        ().into_any()
+                    } else {
+                        view! {
+                            <div class="mt-1.5 flex flex-wrap gap-1.5">
+                                {promotion_pills
+                                    .into_iter()
+                                    .map(|pill| {
+                                        let pill_text = pill.label.clone();
+
+                                        view! {
+                                            <span
+                                                class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium"
+                                                style=pill.style
+                                            >
+                                                {pill_text}
+                                            </span>
+                                        }
+                                    })
+                                    .collect_view()}
+                            </div>
+                        }
+                            .into_any()
+                    }}
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button
+                        type="button"
+                        aria-label="Remove item from basket"
+                        class="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                        on:click=move |_| {
+                            cart_items.update(|items| {
+                                if basket_index < items.len() {
+                                    items.remove(basket_index);
+                                }
+                            });
+                        }
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-minus-icon lucide-minus"
+                        >
+                            <path d="M5 12h14"></path>
+                        </svg>
+                    </button>
+                    <button
+                        type="button"
+                        aria-label="Add another item to basket"
+                        class="rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white hover:bg-slate-700"
+                        on:click=move |_| {
+                            cart_items.update(|items| items.push(fixture_key.clone()));
+                        }
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-plus-icon lucide-plus"
+                        >
+                            <path d="M5 12h14"></path>
+                            <path d="M12 5v14"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </li>
+    }
+}
+
+#[component]
+fn BasketBody(basket: BasketViewModel, cart_items: RwSignal<Vec<String>>) -> impl IntoView {
+    let summary = view! {
+        <BasketSummary
+            subtotal=basket.subtotal.clone()
+            savings=basket.savings.clone()
+            total=basket.total.clone()
+        />
+    };
+
+    if basket.lines.is_empty() {
+        view! {
+            <div>
+                <p class="text-sm text-slate-600">"Your basket is empty."</p>
+                {summary}
+            </div>
+        }
+        .into_any()
+    } else {
+        view! {
+            <div>
+                <ul class="space-y-3">
+                    {basket
+                        .lines
+                        .into_iter()
+                        .map(|line| view! { <BasketLine line=line cart_items=cart_items/> })
+                        .collect_view()}
+                </ul>
+                {summary}
+            </div>
+        }
+        .into_any()
+    }
+}
+
+/// Basket panel component.
+#[component]
 pub fn BasketPanel(
     solver_data: Arc<BasketSolverData>,
     cart_items: RwSignal<Vec<String>>,
@@ -220,161 +382,12 @@ pub fn BasketPanel(
     view! {
         <aside>
             <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                <h2 class="mb-4 text-lg font-semibold">"Basket"</h2>
-                {let solver_data = Arc::clone(&solver_data);
-                    let solve_time_text = solve_time_text;
-
+                <h2 class="mb-4 text-lg font-semibold">{move || format!("Basket ({})", cart_items.get().len())}</h2>
+                {let solver_data = solver_data;
                     move || match solve_basket(&solver_data, &cart_items.get()) {
                     Ok(basket) => {
                         solve_time_text.set(basket.solve_duration.clone());
-
-                        let summary = view! {
-                            <div class="mt-4 space-y-1 border-t border-slate-200 pt-3 text-sm">
-                                <p class="flex items-center justify-between">
-                                    <span class="text-slate-600">"Subtotal"</span>
-                                    <span>{basket.subtotal.clone()}</span>
-                                </p>
-                                <p class="flex items-center justify-between">
-                                    <span class="text-slate-600">"Savings"</span>
-                                    <span>{basket.savings.clone()}</span>
-                                </p>
-                                <p class="flex items-center justify-between font-semibold">
-                                    <span>"Total"</span>
-                                    <span>{basket.total.clone()}</span>
-                                </p>
-                            </div>
-                        };
-
-                        if basket.lines.is_empty() {
-                            view! {
-                                <div>
-                                    <p class="text-sm text-slate-600">"Your basket is empty."</p>
-                                    {summary}
-                                </div>
-                            }
-                                .into_any()
-                        } else {
-                            view! {
-                                <div>
-                                    <ul class="space-y-3">
-                                        {basket
-                                            .lines
-                                            .into_iter()
-                                            .map(|line| {
-                                                let basket_index = line.basket_index;
-                                                let fixture_key = line.fixture_key.clone();
-                                                let has_discount = line.base_price != line.final_price;
-                                                let promotion_pills = line.promotions;
-
-                                                view! {
-                                                    <li>
-                                                        <div class="flex items-start justify-between gap-2">
-                                                            <div class="min-w-0 flex-1">
-                                                                <div class="flex items-center gap-3">
-                                                                    <p class="min-w-0 flex-1 truncate text-sm font-medium">{line.name}</p>
-                                                                    <div class="shrink-0 text-right">
-                                                                        {if has_discount {
-                                                                            view! {
-                                                                                <span class="mr-2 text-xs text-slate-500 line-through">{line.base_price}</span>
-                                                                            }
-                                                                                .into_any()
-                                                                        } else {
-                                                                            ().into_any()
-                                                                        }}
-                                                                        <span class="text-sm text-slate-700">{line.final_price}</span>
-                                                                    </div>
-                                                                </div>
-                                                                {if promotion_pills.is_empty() {
-                                                                    ().into_any()
-                                                                } else {
-                                                                    view! {
-                                                                        <div class="mt-1.5 flex flex-wrap gap-1.5">
-                                                                            {promotion_pills
-                                                                                .into_iter()
-                                                                                .map(|pill| {
-                                                                                    let pill_text = format!("{}", pill.label);
-
-                                                                                    view! {
-                                                                                        <span
-                                                                                            class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium"
-                                                                                            style=pill.style
-                                                                                        >
-                                                                                            {pill_text}
-                                                                                        </span>
-                                                                                    }
-                                                                                })
-                                                                                .collect_view()}
-                                                                        </div>
-                                                                    }
-                                                                        .into_any()
-                                                                }}
-                                                            </div>
-
-                                                            <div class="flex items-center gap-2">
-                                                                <button
-                                                                    type="button"
-                                                                    aria-label="Remove item from basket"
-                                                                    class="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
-                                                                    on:click=move |_| {
-                                                                        cart_items.update(|items| {
-                                                                            if basket_index < items.len() {
-                                                                                items.remove(basket_index);
-                                                                            }
-                                                                        });
-                                                                    }
-                                                                >
-                                                                    <svg
-                                                                        xmlns="http://www.w3.org/2000/svg"
-                                                                        width="24"
-                                                                        height="24"
-                                                                        viewBox="0 0 24 24"
-                                                                        fill="none"
-                                                                        stroke="currentColor"
-                                                                        stroke-width="2"
-                                                                        stroke-linecap="round"
-                                                                        stroke-linejoin="round"
-                                                                        class="lucide lucide-minus-icon lucide-minus"
-                                                                    >
-                                                                        <path d="M5 12h14"></path>
-                                                                    </svg>
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    aria-label="Add another item to basket"
-                                                                    class="rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white hover:bg-slate-700"
-                                                                    on:click=move |_| {
-                                                                        cart_items
-                                                                            .update(|items| items.push(fixture_key.clone()));
-                                                                    }
-                                                                >
-                                                                    <svg
-                                                                        xmlns="http://www.w3.org/2000/svg"
-                                                                        width="24"
-                                                                        height="24"
-                                                                        viewBox="0 0 24 24"
-                                                                        fill="none"
-                                                                        stroke="currentColor"
-                                                                        stroke-width="2"
-                                                                        stroke-linecap="round"
-                                                                        stroke-linejoin="round"
-                                                                        class="lucide lucide-plus-icon lucide-plus"
-                                                                    >
-                                                                        <path d="M5 12h14"></path>
-                                                                        <path d="M12 5v14"></path>
-                                                                    </svg>
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    </li>
-                                                }
-                                            })
-                                            .collect_view()}
-                                    </ul>
-                                    {summary}
-                                </div>
-                            }
-                                .into_any()
-                        }
+                        view! { <BasketBody basket=basket cart_items=cart_items/> }.into_any()
                     }
                     Err(error_message) => view! {
                         {solve_time_text.set(String::new());}

@@ -1168,6 +1168,7 @@ dependencies = [
  "humanize-duration",
  "lattice",
  "leptos",
+ "petgraph",
  "rusty-money",
  "serde_norway",
  "slotmap",

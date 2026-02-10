@@ -36,5 +36,5 @@ products:
 
   newspaper:
     name: Newspaper
-    tags: [newspaper]
+    tags: [newspaper, staff-discount-exempt]
     price: 2.00 GBP

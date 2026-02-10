@@ -59,9 +59,9 @@ pub fn load_products(yaml: &str) -> Result<LoadedProducts, String> {
                 "Currency mismatch in products fixture: expected {}, found {}",
                 existing_currency.iso_alpha_code, parsed_currency.iso_alpha_code
             ));
-        } else {
-            currency = Some(parsed_currency);
         }
+
+        currency = Some(parsed_currency);
 
         let parsed_product: Product<'static> =
             Product::try_from(product_fixture).map_err(|error| error.to_string())?;
@@ -114,6 +114,8 @@ pub fn ProductsPanel(
     products: Arc<Vec<ProductListItem>>,
     cart_items: RwSignal<Vec<String>>,
 ) -> impl IntoView {
+    let products = Arc::unwrap_or_clone(products);
+
     view! {
         <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <h2 class="mb-4 text-lg font-semibold">"Products"</h2>
