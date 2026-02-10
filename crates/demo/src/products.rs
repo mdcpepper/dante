@@ -229,6 +229,7 @@ pub fn ProductsPanel(
 
                         let show_shelf_price =
                             estimate.is_some_and(|value| value.marginal_minor != product.price_minor);
+
                         let shelf_price = show_shelf_price.then(|| price.clone());
 
                         let savings_text = estimate.and_then(|value| {

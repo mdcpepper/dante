@@ -118,6 +118,7 @@ fn build_basket(
 /// # Errors
 ///
 /// Returns an error if basket construction or graph solving fails.
+#[cfg(target_arch = "wasm32")]
 pub fn solve_total_minor(
     solver_data: &BasketSolverData,
     cart_fixture_keys: &[String],
