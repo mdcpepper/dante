@@ -46,7 +46,9 @@ pub async fn main() {
     let listener = TcpListener::new(addr).bind().await;
 
     // Create router
-    let router = Router::new().push(Router::with_path("healthcheck").get(healthcheck::handler));
+    let router = Router::new()
+        .hoop(CatchPanic::new())
+        .push(Router::with_path("healthcheck").get(healthcheck::handler));
 
     // Create OpenAPI documentation
     let doc = OpenApi::new("Lattice API", "0.1.0").merge_router(&router);
