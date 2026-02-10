@@ -254,3 +254,236 @@ fn connect_split_edges(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Test bundle_pill_style function
+    #[test]
+    fn test_bundle_pill_style_deterministic() {
+        let style1 = bundle_pill_style(0);
+        let style2 = bundle_pill_style(0);
+
+        assert_eq!(style1, style2);
+    }
+
+    #[test]
+    fn test_bundle_pill_style_different_bundles() {
+        let style1 = bundle_pill_style(0);
+        let style2 = bundle_pill_style(1);
+
+        assert_ne!(style1, style2);
+    }
+
+    #[test]
+    fn test_bundle_pill_style_tone_bands() {
+        // Test different tone bands (based on bundle / 12)
+        let style_band_0 = bundle_pill_style(0);
+        let style_band_1 = bundle_pill_style(12);
+        let style_band_2 = bundle_pill_style(24);
+        let style_band_3 = bundle_pill_style(36);
+        let style_band_4 = bundle_pill_style(48);
+        let style_band_5 = bundle_pill_style(60);
+
+        // All should be different due to different saturation/lightness values
+        assert_ne!(style_band_0, style_band_1);
+        assert_ne!(style_band_1, style_band_2);
+        assert_ne!(style_band_2, style_band_3);
+        assert_ne!(style_band_3, style_band_4);
+        assert_ne!(style_band_4, style_band_5);
+    }
+
+    #[test]
+    fn test_bundle_pill_style_cycling_hues() {
+        // Test that hue calculation cycles properly
+        let style_0 = bundle_pill_style(0);
+        let style_360 = bundle_pill_style(360);
+
+        // Extract and verify hue values are in valid range
+        fn extract_first_hue(s: &str) -> String {
+            let start = s.find("hsl(").unwrap() + 4;
+            let end = s[start..].find(',').unwrap() + start;
+
+            s[start..end].to_string()
+        }
+
+        let hue_0 = extract_first_hue(&style_0);
+        let hue_360 = extract_first_hue(&style_360);
+
+        // Parse as integers and verify they're in valid range
+        assert!(hue_0.parse::<u16>().unwrap() < 360);
+        assert!(hue_360.parse::<u16>().unwrap() < 360);
+    }
+
+    // Test load_promotions function
+    #[test]
+    fn test_load_promotions_empty() {
+        let yaml = r"
+promotions: {}
+root: layer1
+nodes:
+  layer1:
+    promotions: []
+    output: pass-through
+";
+
+        let result = load_promotions(yaml);
+
+        assert!(result.is_ok());
+
+        let loaded = result.ok().unwrap();
+
+        assert_eq!(loaded.promotion_names.len(), 0);
+    }
+
+    #[test]
+    fn test_load_promotions_invalid_yaml() {
+        let yaml = "invalid: yaml: structure: [[[";
+
+        let result = load_promotions(yaml);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_promotions_single_promotion() {
+        let yaml = r#"
+promotions:
+  promo1:
+    type: direct_discount
+    name: "Test Promo"
+    tags: [test]
+    discount:
+      type: percentage_off
+      amount: 10%
+root: layer1
+nodes:
+  layer1:
+    promotions: ["promo1"]
+    output: pass-through
+"#;
+
+        let result = load_promotions(yaml);
+
+        assert!(result.is_ok());
+
+        let loaded = result.ok().unwrap();
+
+        assert_eq!(loaded.promotion_names.len(), 1);
+    }
+
+    #[test]
+    fn test_load_promotions_graph_missing_root() {
+        let yaml = r"
+promotions: {}
+nodes:
+  layer1:
+    promotions: []
+    output: pass-through
+";
+
+        let result = load_promotions(yaml);
+
+        // Should fail due to missing root field
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_promotions_graph_unknown_promotion() {
+        let yaml = r#"
+promotions: {}
+root: layer1
+nodes:
+  layer1:
+    promotions: ["unknown"]
+    output: pass-through
+"#;
+
+        let result = load_promotions(yaml);
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unknown promotion key"));
+    }
+
+    #[test]
+    fn test_load_promotions_multiple_layers() {
+        let yaml = r#"
+promotions:
+  promo1:
+    type: direct_discount
+    name: "Promo 1"
+    tags: [a]
+    discount:
+      type: percentage_off
+      amount: 10%
+  promo2:
+    type: direct_discount
+    name: "Promo 2"
+    tags: [b]
+    discount:
+      type: percentage_off
+      amount: 20%
+root: layer1
+nodes:
+  layer1:
+    promotions: ["promo1"]
+    output: pass-through
+    next: layer2
+  layer2:
+    promotions: ["promo2"]
+    output: pass-through
+"#;
+
+        let result = load_promotions(yaml);
+
+        assert!(result.is_ok());
+
+        let loaded = result.ok().unwrap();
+
+        assert_eq!(loaded.promotion_names.len(), 2);
+    }
+
+    #[test]
+    fn test_load_promotions_split_mode() {
+        let yaml = r"
+promotions: {}
+root: layer1
+nodes:
+  layer1:
+    promotions: []
+    output: split
+    participating: layer2
+    non_participating: layer3
+  layer2:
+    promotions: []
+    output: pass-through
+  layer3:
+    promotions: []
+    output: pass-through
+";
+
+        let result = load_promotions(yaml);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_load_promotions_invalid_promotion_structure() {
+        let yaml = r#"
+promotions:
+  promo1:
+    name: "Test Promo"
+    type: invalid_type
+root: layer1
+nodes:
+  layer1:
+    promotions: ["promo1"]
+    output: pass-through
+"#;
+
+        let result = load_promotions(yaml);
+
+        assert!(result.is_err());
+    }
+}

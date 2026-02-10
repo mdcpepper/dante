@@ -4,10 +4,8 @@ use std::sync::Arc;
 
 use leptos::prelude::*;
 
-mod basket;
-mod estimates;
-mod products;
-mod promotions;
+// Re-export modules from lib
+use lattice_demo::{basket, estimates, products, promotions};
 
 const PRODUCTS_FIXTURE_YAML: &str = include_str!("../../../fixtures/products/demo.yml");
 const PROMOTIONS_FIXTURE_YAML: &str = include_str!("../../../fixtures/promotions/demo.yml");
@@ -144,11 +142,4 @@ fn main() {
     }
 
     leptos::mount::mount_to_body(App);
-}
-
-fn announce(live_message: RwSignal<(u64, String)>, message: String) {
-    live_message.update(|(id, text)| {
-        *id = id.saturating_add(1);
-        *text = message;
-    });
 }
