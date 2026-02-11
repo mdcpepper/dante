@@ -1,40 +1,24 @@
 [package]
-name = "lattice"
+name = "lattice-json"
 version = "0.1.0"
 edition = "2024"
 
-[features]
-# Default to the minimal bundled MILP solver.
-default = ["solver-microlp"]
+[dependencies]
+clap = { version = "4.5.57", features = ["derive", "env"] }
+dotenvy = "0.15.7"
+salvo = { version = "0.89.1", features = ["catch-panic", "trailing-slash", "oapi"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+tokio = { version = "1.49.0", features = ["macros", "signal"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+thiserror.workspace = true
 
-# Use microlp (bundled) as the MILP solver backend.
-solver-microlp = ["good_lp/microlp"]
-
-# Use HiGHS as the MILP solver backend (requires building the `highs` crate).
-# If you enable both, the code will prefer HiGHS.
-solver-highs = ["good_lp/highs"]
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+tikv-jemallocator = "0.5"
 
 [dev-dependencies]
-anyhow = "1.0.100"
-tempfile = "3"
 testresult.workspace = true
-
-[dependencies]
-clap = { version = "4.5.57", features = ["derive"] }
-decimal-percentage = "0.1.4"
-good_lp = { version = "1.14.2", default-features = false }
-humanize-duration = "0.0.7"
-num-traits = "0.2.19"
-petgraph = "0.8.3"
-rust_decimal = "1.40.0"
-rustc-hash = "2.1.1"
-rusty-money.workspace = true
-serde = { version = "1.0.228", features = ["derive"] }
-serde_norway.workspace = true
-slotmap.workspace = true
-smallvec = "1.15.1"
-tabled = "0.20.0"
-thiserror.workspace = true
 
 [lints.rust]
 missing_debug_implementations = "warn"
