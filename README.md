@@ -5,6 +5,7 @@
 Lattice is a high-performance, general-purpose pricing, promotion and basket 
 optimisation engine written in Rust.
 
+[![Lattice](assets/demo.png)](https://mdcpepper.github.io/lattice/)
 [Live Demo](https://mdcpepper.github.io/lattice/)
 
 * [Promotion Types](#promotion-types)
