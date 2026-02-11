@@ -11,6 +11,13 @@ use tracing_subscriber::EnvFilter;
 
 use crate::{config::ServerConfig, handlers::healthcheck};
 
+#[cfg(not(target_env = "msvc"))]
+use tikv_jemallocator::Jemalloc;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
+
 mod config;
 mod handlers;
 
@@ -60,8 +67,6 @@ pub async fn main() {
     let router = router
         .unshift(doc.into_router("/api-doc/openapi.json"))
         .unshift(SwaggerUi::new("/api-doc/openapi.json").into_router("docs"));
-
-    tracing::debug!("{router:?}");
 
     // Start serving requests
     Server::new(listener).serve(router).await;
