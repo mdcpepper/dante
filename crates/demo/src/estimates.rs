@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 #[cfg(target_arch = "wasm32")]
 use std::sync::OnceLock;
@@ -19,22 +19,27 @@ const PRODUCTS_FIXTURE_YAML: &str = include_str!("../../../fixtures/products/dem
 #[cfg(target_arch = "wasm32")]
 const PROMOTIONS_FIXTURE_YAML: &str = include_str!("../../../fixtures/promotions/demo.yml");
 
-const ESTIMATE_DEBOUNCE_MS: i32 = 220;
+const ESTIMATE_DEBOUNCE_MS: i32 = 50;
 
+#[cfg(target_arch = "wasm32")]
 const SPINNER_DELAY_MS: i32 = 100;
 
 #[cfg(target_arch = "wasm32")]
 const WORKER_ERROR_PREFIX: &str = "ERR:\t";
 
+/// UI-facing reactive state for product impact estimates.
 #[derive(Debug, Clone, Copy)]
 pub struct EstimateUiSignals {
-    pub estimates: RwSignal<HashMap<String, ProductEstimate>>,
+    /// Map of product fixture key to current estimate.
+    pub estimates: RwSignal<BTreeMap<String, ProductEstimate>>,
+
+    /// Whether the product panel should show its estimating spinner.
     pub show_spinner: RwSignal<bool>,
 }
 
 #[derive(Debug, Clone, Copy)]
 struct EstimateSignals {
-    estimates: RwSignal<HashMap<String, ProductEstimate>>,
+    estimates: RwSignal<BTreeMap<String, ProductEstimate>>,
     estimating: RwSignal<bool>,
     show_spinner: RwSignal<bool>,
     generation: RwSignal<u64>,
@@ -57,9 +62,10 @@ struct WorkerData {
 #[cfg(target_arch = "wasm32")]
 static WORKER_DATA: OnceLock<Result<WorkerData, String>> = OnceLock::new();
 
+/// Install estimation effects tied to cart changes and return UI-facing signals.
 pub fn install(cart_items: RwSignal<Vec<String>>) -> EstimateUiSignals {
     let signals = EstimateSignals {
-        estimates: RwSignal::new(HashMap::new()),
+        estimates: RwSignal::new(BTreeMap::new()),
         estimating: RwSignal::new(false),
         show_spinner: RwSignal::new(false),
         generation: RwSignal::new(0_u64),
@@ -114,6 +120,7 @@ fn begin_estimation(run_id: u64, signals: EstimateSignals) {
     spawn_spinner_reveal(run_id, signals);
 }
 
+#[cfg(target_arch = "wasm32")]
 fn spawn_spinner_reveal(run_id: u64, signals: EstimateSignals) {
     task::spawn_local(async move {
         wait_for_timeout(SPINNER_DELAY_MS).await;
@@ -124,13 +131,20 @@ fn spawn_spinner_reveal(run_id: u64, signals: EstimateSignals) {
     });
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn spawn_spinner_reveal(run_id: u64, signals: EstimateSignals) {
+    if is_current(run_id, signals) && signals.estimating.get_untracked() {
+        signals.show_spinner.set(true);
+    }
+}
+
 fn finish_estimation(signals: EstimateSignals) {
     signals.estimating.set(false);
     signals.show_spinner.set(false);
 }
 
-fn parse_worker_result(result_text: &str) -> HashMap<String, ProductEstimate> {
-    let mut map = HashMap::<String, ProductEstimate>::new();
+fn parse_worker_result(result_text: &str) -> BTreeMap<String, ProductEstimate> {
+    let mut map = BTreeMap::<String, ProductEstimate>::new();
 
     for line in result_text.lines() {
         let mut parts = line.splitn(3, '\t');
@@ -293,4 +307,268 @@ async fn wait_for_timeout(delay_ms: i32) {
 #[cfg(not(target_arch = "wasm32"))]
 async fn wait_for_timeout(_delay_ms: i32) {
     task::tick().await;
+}
+
+#[cfg(test)]
+mod tests {
+    use leptos::prelude::*;
+
+    use super::*;
+
+    #[test]
+    fn test_parse_worker_result_empty_string() {
+        let result = parse_worker_result("");
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_parse_worker_result_single_line() {
+        let input = "product1\t100\t50";
+
+        let result = parse_worker_result(input);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result.get("product1").copied(),
+            Some(ProductEstimate {
+                marginal_minor: 100,
+                savings_minor: 50
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_worker_result_multiple_lines() {
+        let input = "product1\t100\t50\nproduct2\t200\t75\nproduct3\t150\t25";
+
+        let result = parse_worker_result(input);
+
+        assert_eq!(result.len(), 3);
+
+        assert_eq!(
+            result.get("product1").copied(),
+            Some(ProductEstimate {
+                marginal_minor: 100,
+                savings_minor: 50
+            })
+        );
+        assert_eq!(
+            result.get("product2").copied(),
+            Some(ProductEstimate {
+                marginal_minor: 200,
+                savings_minor: 75
+            })
+        );
+        assert_eq!(
+            result.get("product3").copied(),
+            Some(ProductEstimate {
+                marginal_minor: 150,
+                savings_minor: 25
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_worker_result_negative_values() {
+        let input = "product1\t-50\t150";
+
+        let result = parse_worker_result(input);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result.get("product1").copied(),
+            Some(ProductEstimate {
+                marginal_minor: -50,
+                savings_minor: 150
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_worker_result_zero_values() {
+        let input = "product1\t0\t0";
+
+        let result = parse_worker_result(input);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result.get("product1").copied(),
+            Some(ProductEstimate {
+                marginal_minor: 0,
+                savings_minor: 0
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_worker_result_malformed_line_missing_field() {
+        let input = "product1\t100";
+
+        let result = parse_worker_result(input);
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_parse_worker_result_malformed_line_invalid_number() {
+        let input = "product1\tabc\t50";
+
+        let result = parse_worker_result(input);
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_parse_worker_result_mixed_valid_invalid() {
+        let input = "product1\t100\t50\nproduct2\tabc\t75\nproduct3\t150\t25";
+
+        let result = parse_worker_result(input);
+
+        assert_eq!(result.len(), 2);
+        assert!(result.contains_key("product1"));
+        assert!(!result.contains_key("product2"));
+        assert!(result.contains_key("product3"));
+    }
+
+    #[test]
+    fn test_parse_worker_result_empty_lines() {
+        let input = "product1\t100\t50\n\nproduct2\t200\t75";
+
+        let result = parse_worker_result(input);
+
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_worker_result_trailing_newline() {
+        let input = "product1\t100\t50\n";
+
+        let result = parse_worker_result(input);
+
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_worker_result_product_key_with_special_chars() {
+        let input = "product-1_test\t100\t50";
+
+        let result = parse_worker_result(input);
+
+        assert_eq!(result.len(), 1);
+        assert!(result.contains_key("product-1_test"));
+    }
+
+    #[test]
+    fn test_parse_worker_result_large_numbers() {
+        let input = "product1\t999999999\t888888888";
+
+        let result = parse_worker_result(input);
+
+        assert_eq!(result.len(), 1);
+
+        assert_eq!(
+            result.get("product1").copied(),
+            Some(ProductEstimate {
+                marginal_minor: 999_999_999,
+                savings_minor: 888_888_888
+            })
+        );
+    }
+
+    #[test]
+    #[cfg(target_arch = "wasm32")]
+    fn test_decode_cart_keys_empty() {
+        let result = decode_cart_keys("");
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    #[cfg(target_arch = "wasm32")]
+    fn test_decode_cart_keys_single_item() {
+        let result = decode_cart_keys("item1");
+
+        assert_eq!(result, vec!["item1".to_string()]);
+    }
+
+    #[test]
+    #[cfg(target_arch = "wasm32")]
+    fn test_decode_cart_keys_multiple_items() {
+        let result = decode_cart_keys("item1\nitem2\nitem3");
+
+        assert_eq!(
+            result,
+            vec![
+                "item1".to_string(),
+                "item2".to_string(),
+                "item3".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    #[cfg(target_arch = "wasm32")]
+    fn test_decode_cart_keys_trailing_newline() {
+        let result = decode_cart_keys("item1\nitem2\n");
+
+        assert_eq!(
+            result,
+            vec!["item1".to_string(), "item2".to_string(), String::new()]
+        );
+    }
+
+    // Test signal-based helper functions
+    #[test]
+    fn test_is_current_returns_true_for_matching_id() {
+        let signals = EstimateSignals {
+            estimates: RwSignal::new(BTreeMap::new()),
+            estimating: RwSignal::new(false),
+            show_spinner: RwSignal::new(false),
+            generation: RwSignal::new(42),
+        };
+
+        assert!(is_current(42, signals));
+    }
+
+    #[test]
+    fn test_is_current_returns_false_for_different_id() {
+        let signals = EstimateSignals {
+            estimates: RwSignal::new(BTreeMap::new()),
+            estimating: RwSignal::new(false),
+            show_spinner: RwSignal::new(false),
+            generation: RwSignal::new(42),
+        };
+
+        assert!(!is_current(41, signals));
+    }
+
+    #[test]
+    fn test_begin_estimation_sets_estimating() {
+        let signals = EstimateSignals {
+            estimates: RwSignal::new(BTreeMap::new()),
+            estimating: RwSignal::new(false),
+            show_spinner: RwSignal::new(false),
+            generation: RwSignal::new(1),
+        };
+
+        begin_estimation(1, signals);
+
+        assert!(signals.estimating.get_untracked());
+    }
+
+    #[test]
+    fn test_finish_estimation_clears_state() {
+        let signals = EstimateSignals {
+            estimates: RwSignal::new(BTreeMap::new()),
+            estimating: RwSignal::new(true),
+            show_spinner: RwSignal::new(true),
+            generation: RwSignal::new(1),
+        };
+
+        finish_estimation(signals);
+
+        assert!(!signals.estimating.get_untracked());
+        assert!(!signals.show_spinner.get_untracked());
+    }
 }

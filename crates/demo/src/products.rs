@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
 };
 
@@ -12,13 +12,13 @@ use lattice::{
     products::{Product, ProductKey},
 };
 
-fn start_icon_confirmation(confirmed_icons: RwSignal<HashSet<String>>, icon_key: &str) {
+fn start_icon_confirmation(confirmed_icons: RwSignal<BTreeSet<String>>, icon_key: &str) {
     confirmed_icons.update(|states| {
         states.insert(icon_key.to_string());
     });
 }
 
-fn clear_icon_confirmation(confirmed_icons: RwSignal<HashSet<String>>, icon_key: &str) {
+fn clear_icon_confirmation(confirmed_icons: RwSignal<BTreeSet<String>>, icon_key: &str) {
     confirmed_icons.update(|states| {
         states.remove(icon_key);
     });
@@ -70,6 +70,11 @@ pub struct LoadedProducts {
 }
 
 /// Load products fixture content into UI and solver-ready structures.
+///
+/// # Errors
+///
+/// Returns an error when fixture parsing fails, prices are invalid, currencies
+/// are inconsistent across products, or no products are present.
 pub fn load_products(yaml: &str) -> Result<LoadedProducts, String> {
     let products_fixture: ProductsFixture = serde_norway::from_str(yaml)
         .map_err(|error| format!("Failed to parse products fixture: {error}"))?;
@@ -219,7 +224,7 @@ fn ProductRow(
     estimate: Option<ProductEstimate>,
     cart_items: RwSignal<Vec<String>>,
     action_message: RwSignal<Option<String>>,
-    add_icon_confirmations: RwSignal<HashSet<String>>,
+    add_icon_confirmations: RwSignal<BTreeSet<String>>,
 ) -> impl IntoView {
     let item_name = product.name.clone();
     let product_name = item_name.clone();
@@ -336,8 +341,8 @@ fn ProductRows(
     products: Vec<ProductListItem>,
     cart_items: RwSignal<Vec<String>>,
     action_message: RwSignal<Option<String>>,
-    estimates: RwSignal<HashMap<String, ProductEstimate>>,
-    add_icon_confirmations: RwSignal<HashSet<String>>,
+    estimates: RwSignal<BTreeMap<String, ProductEstimate>>,
+    add_icon_confirmations: RwSignal<BTreeSet<String>>,
 ) -> impl IntoView {
     view! {
         {move || {
@@ -364,14 +369,19 @@ fn ProductRows(
 /// Products panel component.
 #[component]
 pub fn ProductsPanel(
+    /// Product rows rendered in the panel.
     products: Arc<Vec<ProductListItem>>,
+    /// Shared cart fixture keys.
     cart_items: RwSignal<Vec<String>>,
+    /// Ephemeral action message shown to the user.
     action_message: RwSignal<Option<String>>,
-    estimates: RwSignal<HashMap<String, ProductEstimate>>,
+    /// Latest per-product basket-impact estimates.
+    estimates: RwSignal<BTreeMap<String, ProductEstimate>>,
+    /// Whether estimate recalculation is currently in progress.
     show_spinner: RwSignal<bool>,
 ) -> impl IntoView {
     let products = Arc::unwrap_or_clone(products);
-    let add_icon_confirmations = RwSignal::new(HashSet::<String>::new());
+    let add_icon_confirmations = RwSignal::new(BTreeSet::<String>::new());
 
     view! {
         <section class="products-panel">
@@ -386,5 +396,366 @@ pub fn ProductsPanel(
                 />
             </ul>
         </section>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use leptos::prelude::*;
+    use testresult::TestResult;
+
+    use super::*;
+
+    // Test icon confirmation helper functions
+    #[test]
+    fn test_start_icon_confirmation_adds_key() {
+        let confirmed_icons = RwSignal::new(BTreeSet::<String>::new());
+
+        start_icon_confirmation(confirmed_icons, "test-key");
+
+        let result = confirmed_icons.get_untracked();
+
+        assert!(result.contains("test-key"));
+    }
+
+    #[test]
+    fn test_start_icon_confirmation_multiple_keys() {
+        let confirmed_icons = RwSignal::new(BTreeSet::<String>::new());
+
+        start_icon_confirmation(confirmed_icons, "key1");
+        start_icon_confirmation(confirmed_icons, "key2");
+
+        let result = confirmed_icons.get_untracked();
+
+        assert!(result.contains("key1"));
+        assert!(result.contains("key2"));
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_clear_icon_confirmation_removes_key() {
+        let confirmed_icons = RwSignal::new(BTreeSet::<String>::new());
+
+        start_icon_confirmation(confirmed_icons, "test-key");
+
+        clear_icon_confirmation(confirmed_icons, "test-key");
+
+        let result = confirmed_icons.get_untracked();
+
+        assert!(!result.contains("test-key"));
+    }
+
+    #[test]
+    fn test_clear_icon_confirmation_nonexistent_key() {
+        let confirmed_icons = RwSignal::new(BTreeSet::<String>::new());
+
+        clear_icon_confirmation(confirmed_icons, "nonexistent");
+
+        let result = confirmed_icons.get_untracked();
+
+        assert!(result.is_empty());
+    }
+
+    // Test format_price function
+    #[test]
+    fn test_format_price_gbp_positive() {
+        let result = format_price(1250, "GBP");
+
+        assert_eq!(result, "£12.50");
+    }
+
+    #[test]
+    fn test_format_price_usd_positive() {
+        let result = format_price(999, "USD");
+
+        assert_eq!(result, "$9.99");
+    }
+
+    #[test]
+    fn test_format_price_eur_positive() {
+        let result = format_price(5000, "EUR");
+
+        assert_eq!(result, "€50.00");
+    }
+
+    #[test]
+    fn test_format_price_zero() {
+        let result = format_price(0, "GBP");
+
+        assert_eq!(result, "£0.00");
+    }
+
+    #[test]
+    fn test_format_price_negative_gbp() {
+        let result = format_price(-1250, "GBP");
+
+        assert_eq!(result, "-£12.50");
+    }
+
+    #[test]
+    fn test_format_price_negative_usd() {
+        let result = format_price(-999, "USD");
+
+        assert_eq!(result, "-$9.99");
+    }
+
+    #[test]
+    fn test_format_price_negative_eur() {
+        let result = format_price(-5000, "EUR");
+
+        assert_eq!(result, "-€50.00");
+    }
+
+    #[test]
+    fn test_format_price_single_digit_cents() {
+        let result = format_price(105, "GBP");
+
+        assert_eq!(result, "£1.05");
+    }
+
+    #[test]
+    fn test_format_price_zero_cents() {
+        let result = format_price(1000, "USD");
+
+        assert_eq!(result, "$10.00");
+    }
+
+    #[test]
+    fn test_format_price_large_amount() {
+        let result = format_price(123_456, "GBP");
+
+        assert_eq!(result, "£1234.56");
+    }
+
+    #[test]
+    fn test_format_price_unknown_currency() {
+        let result = format_price(1250, "JPY");
+
+        assert_eq!(result, "12.50 JPY");
+    }
+
+    #[test]
+    fn test_format_price_unknown_currency_zero() {
+        let result = format_price(0, "CHF");
+
+        assert_eq!(result, "0.00 CHF");
+    }
+
+    #[test]
+    fn test_format_price_unknown_currency_negative() {
+        let result = format_price(-1250, "AUD");
+
+        assert_eq!(result, "-12.50 AUD");
+    }
+
+    #[test]
+    fn test_format_price_one_cent() {
+        let result = format_price(1, "GBP");
+
+        assert_eq!(result, "£0.01");
+    }
+
+    #[test]
+    fn test_format_price_ninety_nine_cents() {
+        let result = format_price(99, "USD");
+
+        assert_eq!(result, "$0.99");
+    }
+
+    #[test]
+    fn test_format_price_exactly_one_dollar() {
+        let result = format_price(100, "USD");
+
+        assert_eq!(result, "$1.00");
+    }
+
+    #[test]
+    fn test_format_price_very_large_amount() {
+        let result = format_price(999_999_999, "EUR");
+
+        assert_eq!(result, "€9999999.99");
+    }
+
+    // Test load_products function with valid YAML
+    #[test]
+    fn test_load_products_empty_yaml() {
+        let yaml = r"
+products: {}
+";
+
+        let result = load_products(yaml);
+
+        assert!(result.is_err());
+        assert!(result.is_err_and(|error| error.contains("No products found in fixture")));
+    }
+
+    #[test]
+    fn test_load_products_invalid_yaml() {
+        let yaml = "invalid: yaml: structure: [[[";
+
+        let result = load_products(yaml);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_products_single_product() -> TestResult {
+        let yaml = r#"
+products:
+  product1:
+    name: "Test Product"
+    price: "10.00 GBP"
+    tags: []
+"#;
+
+        let result = load_products(yaml);
+
+        assert!(result.is_ok());
+
+        let loaded = result?;
+
+        assert_eq!(loaded.products.len(), 1);
+        assert_eq!(loaded.products[0].name, "Test Product");
+        assert_eq!(loaded.products[0].price_minor, 1000);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_load_products_multiple_products_sorted() -> TestResult {
+        let yaml = r#"
+products:
+  product1:
+    name: "Zebra"
+    price: "10.00 GBP"
+    tags: []
+  product2:
+    name: "Apple"
+    price: "5.00 GBP"
+    tags: []
+  product3:
+    name: "Mango"
+    price: "7.50 GBP"
+    tags: []
+"#;
+
+        let result = load_products(yaml);
+
+        assert!(result.is_ok());
+
+        let loaded = result?;
+
+        assert_eq!(loaded.products.len(), 3);
+
+        // Products should be sorted alphabetically by name
+        assert_eq!(loaded.products[0].name, "Apple");
+        assert_eq!(loaded.products[1].name, "Mango");
+        assert_eq!(loaded.products[2].name, "Zebra");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_load_products_currency_mismatch() {
+        let yaml = r#"
+products:
+  product1:
+    name: "Product 1"
+    price: "10.00 GBP"
+    tags: []
+  product2:
+    name: "Product 2"
+    price: "5.00 USD"
+    tags: []
+"#;
+
+        let result = load_products(yaml);
+
+        assert!(result.is_err());
+        assert!(result.is_err_and(|error| error.contains("Currency mismatch")));
+    }
+
+    #[test]
+    fn test_load_products_invalid_price() {
+        let yaml = r#"
+products:
+  product1:
+    name: "Test Product"
+    price: "invalid"
+    tags: []
+"#;
+
+        let result = load_products(yaml);
+
+        assert!(result.is_err());
+        assert!(result.is_err_and(|error| error.contains("Invalid price")));
+    }
+
+    #[test]
+    fn test_load_products_with_tags() -> TestResult {
+        let yaml = r#"
+products:
+  product1:
+    name: "Test Product"
+    price: "10.00 GBP"
+    tags: ["tag1", "tag2"]
+"#;
+
+        let result = load_products(yaml);
+
+        assert!(result.is_ok());
+
+        let loaded = result?;
+
+        assert_eq!(loaded.products.len(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_load_products_fixture_key_mapping() -> TestResult {
+        let yaml = r#"
+products:
+  my-product-key:
+    name: "Test Product"
+    price: "10.00 GBP"
+    tags: []
+"#;
+
+        let result = load_products(yaml);
+
+        assert!(result.is_ok());
+
+        let loaded = result?;
+
+        assert!(
+            loaded
+                .product_key_by_fixture_key
+                .contains_key("my-product-key")
+        );
+        assert_eq!(loaded.products[0].fixture_key, "my-product-key");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_load_products_currency_extraction() -> TestResult {
+        let yaml = r#"
+products:
+  product1:
+    name: "Test Product"
+    price: "15.50 EUR"
+    tags: []
+"#;
+
+        let result = load_products(yaml);
+
+        assert!(result.is_ok());
+
+        let loaded = result?;
+
+        assert_eq!(loaded.currency.iso_alpha_code, "EUR");
+
+        Ok(())
     }
 }

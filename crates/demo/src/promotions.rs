@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use petgraph::graph::NodeIndex;
 use slotmap::{SecondaryMap, SlotMap};
@@ -39,6 +39,12 @@ pub struct LoadedPromotions {
 }
 
 /// Load promotions and graph fixture content.
+///
+/// # Errors
+///
+/// Returns an error when promotion fixtures cannot be parsed, promotion
+/// definitions are invalid, referenced graph promotions are missing, or graph
+/// validation/building fails.
 pub fn load_promotions(yaml: &str) -> Result<LoadedPromotions, String> {
     let promotions_fixture: PromotionsFixture = serde_norway::from_str(yaml)
         .map_err(|error| format!("Failed to parse promotions fixture: {error}"))?;
@@ -48,7 +54,7 @@ pub fn load_promotions(yaml: &str) -> Result<LoadedPromotions, String> {
 
     let mut promotion_meta_map: SlotMap<PromotionKey, PromotionMeta> = SlotMap::with_key();
     let mut promotion_names: SecondaryMap<PromotionKey, String> = SecondaryMap::new();
-    let mut promotions_by_fixture_key: HashMap<String, Promotion<'static>> = HashMap::new();
+    let mut promotions_by_fixture_key: BTreeMap<String, Promotion<'static>> = BTreeMap::new();
 
     for (fixture_key, promotion_fixture) in promotions_fixture.promotions {
         let promotion_key = promotion_meta_map.insert(PromotionMeta::default());
@@ -97,7 +103,7 @@ pub fn bundle_pill_style(bundle_id: usize) -> String {
 
 fn build_graph(
     graph_fixture: &GraphFixture,
-    promotions_by_fixture_key: &HashMap<String, Promotion<'static>>,
+    promotions_by_fixture_key: &BTreeMap<String, Promotion<'static>>,
 ) -> Result<PromotionGraph<'static>, String> {
     let mut builder = PromotionGraphBuilder::new();
 
@@ -118,9 +124,9 @@ fn build_graph(
 fn add_graph_nodes(
     builder: &mut PromotionGraphBuilder<'static>,
     graph_fixture: &GraphFixture,
-    promotions_by_fixture_key: &HashMap<String, Promotion<'static>>,
-) -> Result<HashMap<String, NodeIndex>, String> {
-    let mut node_indices = HashMap::new();
+    promotions_by_fixture_key: &BTreeMap<String, Promotion<'static>>,
+) -> Result<BTreeMap<String, NodeIndex>, String> {
+    let mut node_indices = BTreeMap::new();
 
     for (label, node_fixture) in &graph_fixture.nodes {
         let promotions_for_node = node_fixture
@@ -149,7 +155,7 @@ fn add_graph_nodes(
 fn connect_graph_edges(
     builder: &mut PromotionGraphBuilder<'static>,
     graph_fixture: &GraphFixture,
-    node_indices: &HashMap<String, NodeIndex>,
+    node_indices: &BTreeMap<String, NodeIndex>,
 ) -> Result<(), String> {
     for (label, node_fixture) in &graph_fixture.nodes {
         let from_idx = node_indices
@@ -172,7 +178,7 @@ fn connect_graph_edges(
 
 fn connect_pass_through_edge(
     builder: &mut PromotionGraphBuilder<'static>,
-    node_indices: &HashMap<String, NodeIndex>,
+    node_indices: &BTreeMap<String, NodeIndex>,
     from_idx: NodeIndex,
     label: &str,
     node_fixture: &GraphNodeFixture,
@@ -193,7 +199,7 @@ fn connect_pass_through_edge(
 
 fn connect_split_edges(
     builder: &mut PromotionGraphBuilder<'static>,
-    node_indices: &HashMap<String, NodeIndex>,
+    node_indices: &BTreeMap<String, NodeIndex>,
     from_idx: NodeIndex,
     label: &str,
     node_fixture: &GraphNodeFixture,
@@ -253,4 +259,223 @@ fn connect_split_edges(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use testresult::TestResult;
+
+    use super::*;
+
+    // Test bundle_pill_style function
+    #[test]
+    fn test_bundle_pill_style_deterministic() {
+        let style1 = bundle_pill_style(0);
+        let style2 = bundle_pill_style(0);
+
+        assert_eq!(style1, style2);
+    }
+
+    #[test]
+    fn test_bundle_pill_style_different_bundles() {
+        let style1 = bundle_pill_style(0);
+        let style2 = bundle_pill_style(1);
+
+        assert_ne!(style1, style2);
+    }
+
+    #[test]
+    fn test_bundle_pill_style_tone_bands() {
+        // Test different tone bands (based on bundle / 12)
+        let style_band_0 = bundle_pill_style(0);
+        let style_band_1 = bundle_pill_style(12);
+        let style_band_2 = bundle_pill_style(24);
+        let style_band_3 = bundle_pill_style(36);
+        let style_band_4 = bundle_pill_style(48);
+        let style_band_5 = bundle_pill_style(60);
+
+        // All should be different due to different saturation/lightness values
+        assert_ne!(style_band_0, style_band_1);
+        assert_ne!(style_band_1, style_band_2);
+        assert_ne!(style_band_2, style_band_3);
+        assert_ne!(style_band_3, style_band_4);
+        assert_ne!(style_band_4, style_band_5);
+    }
+
+    // Test load_promotions function
+    #[test]
+    fn test_load_promotions_empty() -> TestResult {
+        let yaml = r"
+promotions: {}
+root: layer1
+nodes:
+  layer1:
+    promotions: []
+    output: pass-through
+";
+
+        let result = load_promotions(yaml);
+
+        assert!(result.is_ok());
+
+        let loaded = result?;
+
+        assert_eq!(loaded.promotion_names.len(), 0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_load_promotions_invalid_yaml() {
+        let yaml = "invalid: yaml: structure: [[[";
+
+        let result = load_promotions(yaml);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_promotions_single_promotion() -> TestResult {
+        let yaml = r#"
+promotions:
+  promo1:
+    type: direct_discount
+    name: "Test Promo"
+    tags: [test]
+    discount:
+      type: percentage_off
+      amount: 10%
+root: layer1
+nodes:
+  layer1:
+    promotions: ["promo1"]
+    output: pass-through
+"#;
+
+        let result = load_promotions(yaml);
+
+        assert!(result.is_ok());
+
+        let loaded = result?;
+
+        assert_eq!(loaded.promotion_names.len(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_load_promotions_graph_missing_root() {
+        let yaml = r"
+promotions: {}
+nodes:
+  layer1:
+    promotions: []
+    output: pass-through
+";
+
+        let result = load_promotions(yaml);
+
+        // Should fail due to missing root field
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_promotions_graph_unknown_promotion() {
+        let yaml = r#"
+promotions: {}
+root: layer1
+nodes:
+  layer1:
+    promotions: ["unknown"]
+    output: pass-through
+"#;
+
+        let result = load_promotions(yaml);
+
+        assert!(result.is_err());
+        assert!(result.is_err_and(|error| error.contains("Unknown promotion key")));
+    }
+
+    #[test]
+    fn test_load_promotions_multiple_layers() -> TestResult {
+        let yaml = r#"
+promotions:
+  promo1:
+    type: direct_discount
+    name: "Promo 1"
+    tags: [a]
+    discount:
+      type: percentage_off
+      amount: 10%
+  promo2:
+    type: direct_discount
+    name: "Promo 2"
+    tags: [b]
+    discount:
+      type: percentage_off
+      amount: 20%
+root: layer1
+nodes:
+  layer1:
+    promotions: ["promo1"]
+    output: pass-through
+    next: layer2
+  layer2:
+    promotions: ["promo2"]
+    output: pass-through
+"#;
+
+        let result = load_promotions(yaml);
+
+        assert!(result.is_ok());
+
+        let loaded = result?;
+
+        assert_eq!(loaded.promotion_names.len(), 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_load_promotions_split_mode() {
+        let yaml = r"
+promotions: {}
+root: layer1
+nodes:
+  layer1:
+    promotions: []
+    output: split
+    participating: layer2
+    non_participating: layer3
+  layer2:
+    promotions: []
+    output: pass-through
+  layer3:
+    promotions: []
+    output: pass-through
+";
+
+        let result = load_promotions(yaml);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_load_promotions_invalid_promotion_structure() {
+        let yaml = r#"
+promotions:
+  promo1:
+    name: "Test Promo"
+    type: invalid_type
+root: layer1
+nodes:
+  layer1:
+    promotions: ["promo1"]
+    output: pass-through
+"#;
+
+        let result = load_promotions(yaml);
+
+        assert!(result.is_err());
+    }
 }
