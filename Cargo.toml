@@ -1,6 +1,12 @@
 [workspace]
 resolver = "2"
-members = ["crates/core", "crates/json-api", "crates/demo", "crates/css-build"]
+members = [
+    "crates/core",
+    "crates/css-build",
+    "crates/demo",
+    "crates/json-api",
+    "crates/php-ext",
+]
 
 [workspace.dependencies]
 petgraph = "0.8.3"
