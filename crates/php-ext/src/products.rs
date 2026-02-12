@@ -1,5 +1,7 @@
 //! Product
 
+use std::collections::HashSet;
+
 use ext_php_rs::{
     class::RegisteredClass,
     convert::{FromZval, IntoZval},
@@ -22,15 +24,24 @@ pub struct Product {
 
     #[php(prop)]
     price: i64,
+
+    #[php(prop)]
+    tags: HashSet<String>,
 }
 
 #[php_impl]
 impl Product {
-    pub fn __construct(reference: ReferenceValue, name: String, price: i64) -> Self {
+    pub fn __construct(
+        reference: ReferenceValue,
+        name: String,
+        price: i64,
+        tags: Option<HashSet<String>>,
+    ) -> Self {
         Self {
             reference,
             name,
             price,
+            tags: tags.unwrap_or_default(),
         }
     }
 }
@@ -60,6 +71,13 @@ impl ProductRef {
         self.0
             .object()
             .and_then(|obj| obj.get_property::<i64>("price").ok())
+            .unwrap_or_default()
+    }
+
+    pub fn tags(&self) -> HashSet<String> {
+        self.0
+            .object()
+            .and_then(|obj| obj.get_property::<HashSet<String>>("tags").ok())
             .unwrap_or_default()
     }
 }

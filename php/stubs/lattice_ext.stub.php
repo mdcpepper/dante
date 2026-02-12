@@ -9,10 +9,17 @@ if (!class_exists(Product::class)) {
         public mixed $reference;
         public string $name;
         public int $price;
+        /** @var string[] */
+        public array $tags;
+
+        /**
+         * @param string[]|null $tags
+         */
         public function __construct(
             mixed $reference,
             string $name,
             int $price,
+            ?array $tags = [],
         ) {}
     }
 }
@@ -24,12 +31,21 @@ if (!class_exists(Item::class)) {
         public string $name;
         public int $price;
         public Product $product;
+
+        /** @var string[] */
+        public array $tags;
+
+        /**
+         * @param string[]|null $tags
+         */
         public function __construct(
             mixed $id,
             string $name,
             int $price,
             Product $product,
+            ?array $tags = [],
         ) {}
+
         public static function from_product(
             mixed $reference,
             Product $product,

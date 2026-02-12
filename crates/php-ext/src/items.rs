@@ -1,5 +1,7 @@
 //! Items
 
+use std::collections::HashSet;
+
 use ext_php_rs::prelude::*;
 
 use crate::{products::ProductRef, reference_value::ReferenceValue};
@@ -19,28 +21,36 @@ pub struct Item {
 
     #[php(prop)]
     product: ProductRef,
+
+    #[php(prop)]
+    tags: HashSet<String>,
 }
 
 #[php_impl]
 impl Item {
-    pub fn __construct(id: ReferenceValue, name: String, price: i64, product: ProductRef) -> Self {
+    pub fn __construct(
+        id: ReferenceValue,
+        name: String,
+        price: i64,
+        product: ProductRef,
+        tags: Option<HashSet<String>>,
+    ) -> Self {
         Self {
             id,
             name,
             price,
             product,
+            tags: tags.unwrap_or_default(),
         }
     }
 
     #[php(name = "from_product")]
     pub fn from_product(reference: ReferenceValue, product: ProductRef) -> Self {
-        let name = product.name();
-        let price = product.price();
-
         Self {
             id: reference,
-            name,
-            price,
+            name: product.name(),
+            price: product.price(),
+            tags: product.tags(),
             product,
         }
     }
