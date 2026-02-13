@@ -23,7 +23,7 @@ use crate::{
 
 #[derive(Debug, Clone)]
 #[php_class]
-#[php(name = "FeedCode\\Lattice\\Promotions\\DirectDiscount")]
+#[php(name = "Lattice\\Promotions\\DirectDiscount")]
 #[php(implements(PhpInterfacePromotion))]
 pub struct DirectDiscountPromotion {
     #[php(prop)]

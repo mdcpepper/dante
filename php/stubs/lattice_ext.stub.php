@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace FeedCode\Lattice;
+namespace Lattice;
 
 if (!class_exists(Money::class)) {
     class Money
@@ -18,7 +18,7 @@ if (!class_exists(Product::class)) {
     {
         public mixed $reference;
         public string $name;
-        public \FeedCode\Lattice\Money $price;
+        public Money $price;
 
         /** @var string[] */
         public array $tags;
@@ -29,7 +29,7 @@ if (!class_exists(Product::class)) {
         public function __construct(
             mixed $reference,
             string $name,
-            \FeedCode\Lattice\Money $price,
+            Money $price,
             ?array $tags = [],
         ) {}
     }
@@ -40,7 +40,7 @@ if (!class_exists(Item::class)) {
     {
         public mixed $reference;
         public string $name;
-        public \FeedCode\Lattice\Money $price;
+        public Money $price;
         public Product $product;
 
         /** @var string[] */
@@ -52,7 +52,7 @@ if (!class_exists(Item::class)) {
         public function __construct(
             mixed $reference,
             string $name,
-            \FeedCode\Lattice\Money $price,
+            Money $price,
             Product $product,
             ?array $tags = [],
         ) {}
@@ -81,11 +81,11 @@ if (!class_exists(Layer::class)) {
         public mixed $reference;
         public LayerOutput $output;
 
-        /** @var \FeedCode\Lattice\Promotions\Promotion[] */
+        /** @var Lattice\Promotions\Promotion[] */
         public array $promotions;
 
         /**
-         * @param \FeedCode\Lattice\Promotions\Promotion[]|null $promotions
+         * @param Lattice\Promotions\Promotion[]|null $promotions
          */
         public function __construct(
             mixed $reference,
@@ -136,14 +136,14 @@ if (!class_exists(StackBuilder::class)) {
 if (!class_exists(PromotionApplication::class)) {
     class PromotionApplication
     {
-        public \FeedCode\Lattice\Promotions\Promotion $promotion;
+        public Lattice\Promotions\Promotion $promotion;
         public Item $item;
         public int $bundleId;
         public Money $originalPrice;
         public Money $finalPrice;
 
         public function __construct(
-            \FeedCode\Lattice\Promotions\Promotion $promotion,
+            Lattice\Promotions\Promotion $promotion,
             Item $item,
             int $bundleId,
             Money $originalPrice,
@@ -177,13 +177,13 @@ if (!class_exists(Receipt::class)) {
     }
 }
 
-namespace FeedCode\Lattice\Stack;
+namespace Lattice\Stack;
 
 if (!class_exists(InvalidStackException::class)) {
     class InvalidStackException extends \Exception {}
 }
 
-namespace FeedCode\Lattice;
+namespace Lattice;
 
 if (!class_exists(Qualification::class)) {
     class Qualification
@@ -215,7 +215,7 @@ if (!class_exists(Qualification::class)) {
     }
 }
 
-namespace FeedCode\Lattice\Qualification;
+namespace Lattice\Qualification;
 
 if (!class_exists(BoolOp::class)) {
     enum BoolOp: string
@@ -243,7 +243,7 @@ if (!class_exists(Rule::class)) {
         /** @var string[] */
         public array $tags;
 
-        public ?\FeedCode\Lattice\Qualification $group;
+        public ?Lattice\Qualification $group;
 
         /**
          * @param string[]|null $tags
@@ -261,7 +261,7 @@ if (!class_exists(Rule::class)) {
         public static function hasNone(?array $tags = []): self {}
 
         public static function group(
-            \FeedCode\Lattice\Qualification $qualification,
+            Lattice\Qualification $qualification,
         ): self {}
 
         /**
@@ -271,7 +271,7 @@ if (!class_exists(Rule::class)) {
     }
 }
 
-namespace FeedCode\Lattice\Discount;
+namespace Lattice\Discount;
 
 if (!class_exists(InvalidPercentageException::class)) {
     class InvalidPercentageException extends \Exception {}
@@ -312,42 +312,36 @@ if (!class_exists(SimpleDiscount::class)) {
     {
         public DiscountKind $kind;
         public ?Percentage $percentage;
-        public ?\FeedCode\Lattice\Money $amount;
+        public ?Money $amount;
 
         public static function percentageOff(Percentage $percentage): self {}
 
-        public static function amountOverride(
-            \FeedCode\Lattice\Money $amount,
-        ): self {}
+        public static function amountOverride(Money $amount): self {}
 
-        public static function amountOff(
-            \FeedCode\Lattice\Money $amount,
-        ): self {}
+        public static function amountOff(Money $amount): self {}
     }
 }
 
-namespace FeedCode\Lattice\Promotions;
+namespace Lattice\Promotions;
 
-use FeedCode\Lattice\Discount\SimpleDiscount;
-use FeedCode\Lattice\Qualification;
+use Lattice\Discount\SimpleDiscount;
+use Lattice\Qualification;
 
 if (!class_exists(Budget::class)) {
     class Budget
     {
         public ?int $applicationLimit;
-        public ?\FeedCode\Lattice\Money $monetaryLimit;
+        public ?Money $monetaryLimit;
 
         public static function unlimited(): self {}
 
         public static function withApplicationLimit(int $limit): self {}
 
-        public static function withMonetaryLimit(
-            \FeedCode\Lattice\Money $limit,
-        ): self {}
+        public static function withMonetaryLimit(Money $limit): self {}
 
         public static function withBothLimits(
             int $monetaryLimit,
-            \FeedCode\Lattice\Money $limit,
+            Money $limit,
         ): self {}
     }
 }

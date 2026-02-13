@@ -2,21 +2,21 @@
 
 declare(strict_types=1);
 
-use FeedCode\Lattice\Discount\SimpleDiscount;
-use FeedCode\Lattice\Discount\Percentage;
-use FeedCode\Lattice\Item;
-use FeedCode\Lattice\Layer;
-use FeedCode\Lattice\LayerOutput;
-use FeedCode\Lattice\Money;
-use FeedCode\Lattice\Product;
-use FeedCode\Lattice\PromotionApplication;
-use FeedCode\Lattice\Promotions\Budget;
-use FeedCode\Lattice\Promotions\DirectDiscount;
-use FeedCode\Lattice\Qualification;
-use FeedCode\Lattice\Receipt;
-use FeedCode\Lattice\Stack;
-use FeedCode\Lattice\StackBuilder;
-use FeedCode\Lattice\Stack\InvalidStackException;
+use Lattice\Discount\SimpleDiscount;
+use Lattice\Discount\Percentage;
+use Lattice\Item;
+use Lattice\Layer;
+use Lattice\LayerOutput;
+use Lattice\Money;
+use Lattice\Product;
+use Lattice\PromotionApplication;
+use Lattice\Promotions\Budget;
+use Lattice\Promotions\DirectDiscount;
+use Lattice\Qualification;
+use Lattice\Receipt;
+use Lattice\Stack;
+use Lattice\StackBuilder;
+use Lattice\Stack\InvalidStackException;
 
 it("validates a linear stack as a promotion graph", function (): void {
     assertLatticeExtensionLoaded();

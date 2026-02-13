@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use FeedCode\Lattice\Money;
-use FeedCode\Lattice\Product;
+use Lattice\Money;
+use Lattice\Product;
 
 it("creates a product with expected properties", function (): void {
     assertLatticeExtensionLoaded();

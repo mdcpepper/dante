@@ -1,6 +1,6 @@
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
-ext_so := "target/debug/liblattice_php_ext.so"
+ext_so := "target/debug/liblattice.so"
 
 default: test
 

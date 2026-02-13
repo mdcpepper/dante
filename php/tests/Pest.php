@@ -10,6 +10,6 @@ function assertLatticeExtensionLoaded(): void
 
     throw new RuntimeException(
         "The lattice-php-ext extension is not loaded. Run tests with: " .
-            "php -d extension=../target/debug/liblattice_php_ext.so vendor/bin/pest",
+            "php -d extension=../target/debug/liblattice.so vendor/bin/pest",
     );
 }

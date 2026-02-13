@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use FeedCode\Lattice\Qualification;
-use FeedCode\Lattice\Qualification\BoolOp;
-use FeedCode\Lattice\Qualification\Rule;
+use Lattice\Qualification;
+use Lattice\Qualification\BoolOp;
+use Lattice\Qualification\Rule;
 
 it("empty qualification matches all", function (): void {
     assertLatticeExtensionLoaded();

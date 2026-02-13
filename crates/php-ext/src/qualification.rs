@@ -21,7 +21,7 @@ use lattice::{
 
 #[derive(Debug, Clone, Copy)]
 #[php_enum]
-#[php(name = "FeedCode\\Lattice\\Qualification\\BoolOp")]
+#[php(name = "Lattice\\Qualification\\BoolOp")]
 pub enum BoolOp {
     #[php(value = "and")]
     AndOp,
@@ -41,7 +41,7 @@ impl From<BoolOp> for CoreBoolOp {
 
 #[derive(Debug, Clone, Copy)]
 #[php_enum]
-#[php(name = "FeedCode\\Lattice\\Qualification\\RuleKind")]
+#[php(name = "Lattice\\Qualification\\RuleKind")]
 pub enum RuleKind {
     #[php(value = "has_all")]
     HasAll,
@@ -58,7 +58,7 @@ pub enum RuleKind {
 
 #[derive(Debug, Clone)]
 #[php_class]
-#[php(name = "FeedCode\\Lattice\\Qualification\\Rule")]
+#[php(name = "Lattice\\Qualification\\Rule")]
 pub struct Rule {
     #[php(prop)]
     kind: RuleKind,
@@ -118,7 +118,7 @@ impl Rule {
 
 #[derive(Debug, Clone)]
 #[php_class]
-#[php(name = "FeedCode\\Lattice\\Qualification")]
+#[php(name = "Lattice\\Qualification")]
 pub struct Qualification {
     #[php(prop)]
     op: BoolOp,

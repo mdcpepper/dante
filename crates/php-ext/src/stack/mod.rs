@@ -40,7 +40,7 @@ pub mod layers;
 #[derive(Default)]
 #[php_class]
 #[php(
-    name = "FeedCode\\Lattice\\Stack\\InvalidStackException",
+    name = "Lattice\\Stack\\InvalidStackException",
     extends(ce = ce::exception, stub = "\\Exception")
 )]
 pub struct InvalidStackException;
@@ -50,7 +50,7 @@ impl InvalidStackException {}
 
 #[derive(Debug, Default)]
 #[php_class]
-#[php(name = "FeedCode\\Lattice\\StackBuilder")]
+#[php(name = "Lattice\\StackBuilder")]
 pub struct StackBuilder {
     #[php(prop)]
     layers: Vec<LayerRef>,
@@ -116,7 +116,7 @@ impl StackBuilder {
 
 #[derive(Debug, Clone)]
 #[php_class]
-#[php(name = "FeedCode\\Lattice\\Stack")]
+#[php(name = "Lattice\\Stack")]
 pub struct Stack {
     #[php(prop)]
     layers: Vec<LayerRef>,
@@ -300,13 +300,16 @@ fn build_item_group_and_subtotal(
     let mut product_keys = SlotMap::<ProductKey, ()>::with_key();
     let mut core_items: SmallVec<[CoreItem<'static, StringTagCollection>; 10]> =
         SmallVec::with_capacity(items.len());
+
     let mut subtotal_minor: i64 = 0;
     let mut currency: Option<&'static Currency> = None;
+
     let mut php_items = Vec::with_capacity(items.len());
 
     for (idx, item_ref) in items.iter().enumerate() {
         let item: Item = item_ref.clone().try_into()?;
         let price_ref = item.price();
+
         let price: RustyMoney<'static, Currency> = price_ref.clone().try_into().map_err(|e| {
             PhpException::from_class::<InvalidStackException>(format!(
                 "Item {idx} price is invalid: {e}"

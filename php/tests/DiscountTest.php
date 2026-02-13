@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-use FeedCode\Lattice\Discount\DiscountKind;
-use FeedCode\Lattice\Discount\InvalidPercentageException;
-use FeedCode\Lattice\Discount\Percentage;
-use FeedCode\Lattice\Discount\PercentageOutOfRangeException;
-use FeedCode\Lattice\Discount\SimpleDiscount;
-use FeedCode\Lattice\Money;
+use Lattice\Discount\DiscountKind;
+use Lattice\Discount\InvalidPercentageException;
+use Lattice\Discount\Percentage;
+use Lattice\Discount\PercentageOutOfRangeException;
+use Lattice\Discount\SimpleDiscount;
+use Lattice\Money;
 
 it("can create percentage from decimal value", function (): void {
     assertLatticeExtensionLoaded();

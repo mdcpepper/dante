@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use FeedCode\Lattice\Item;
-use FeedCode\Lattice\Money;
-use FeedCode\Lattice\Product;
+use Lattice\Item;
+use Lattice\Money;
+use Lattice\Product;
 
 it(
     "creates an item that points to the same product instance",

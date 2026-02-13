@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-use FeedCode\Lattice\Discount\SimpleDiscount;
-use FeedCode\Lattice\Money;
-use FeedCode\Lattice\Promotions\Budget;
-use FeedCode\Lattice\Promotions\DirectDiscount;
-use FeedCode\Lattice\Promotions\Promotion;
-use FeedCode\Lattice\Qualification;
+use Lattice\Discount\SimpleDiscount;
+use Lattice\Money;
+use Lattice\Promotions\Budget;
+use Lattice\Promotions\DirectDiscount;
+use Lattice\Promotions\Promotion;
+use Lattice\Qualification;
 
 it("implements Promotion interface", function () {
     assertLatticeExtensionLoaded();

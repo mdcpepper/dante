@@ -88,7 +88,7 @@ jobs:
 
       - name: Run PHP extension tests
         working-directory: php
-        run: php -d extension=../target/debug/liblattice_php_ext.so vendor/bin/pest --configuration=phpunit.xml
+        run: php -d extension=../target/debug/liblattice.so vendor/bin/pest --configuration=phpunit.xml
 
   coverage:
     runs-on: ubuntu-latest

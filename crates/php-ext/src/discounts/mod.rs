@@ -20,7 +20,7 @@ pub mod percentages;
 #[derive(Default)]
 #[php_class]
 #[php(
-    name = "FeedCode\\Lattice\\Discount\\InvalidDiscountException",
+    name = "Lattice\\Discount\\InvalidDiscountException",
     extends(ce = ce::exception, stub = "\\Exception")
 )]
 pub struct InvalidDiscountException;
@@ -30,7 +30,7 @@ impl InvalidDiscountException {}
 
 #[derive(Debug, Clone, Copy)]
 #[php_enum]
-#[php(name = "FeedCode\\Lattice\\Discount\\DiscountKind")]
+#[php(name = "Lattice\\Discount\\DiscountKind")]
 pub enum DiscountKind {
     #[php(value = "percentage_off")]
     PercentageOff,
@@ -44,7 +44,7 @@ pub enum DiscountKind {
 
 #[derive(Debug, Clone)]
 #[php_class]
-#[php(name = "FeedCode\\Lattice\\Discount\\SimpleDiscount")]
+#[php(name = "Lattice\\Discount\\SimpleDiscount")]
 pub struct SimpleDiscount {
     #[php(prop)]
     kind: DiscountKind,

@@ -15,7 +15,7 @@ use ext_php_rs::{
 #[derive(Default)]
 #[php_class]
 #[php(
-    name = "FeedCode\\Lattice\\Discount\\InvalidPercentageException",
+    name = "Lattice\\Discount\\InvalidPercentageException",
     extends(ce = ce::exception, stub = "\\Exception")
 )]
 pub struct InvalidPercentageException;
@@ -27,7 +27,7 @@ impl InvalidPercentageException {}
 #[derive(Default)]
 #[php_class]
 #[php(
-    name = "FeedCode\\Lattice\\Discount\\PercentageOutOfRangeException",
+    name = "Lattice\\Discount\\PercentageOutOfRangeException",
     extends(ce = ce::exception, stub = "\\Exception")
 )]
 pub struct PercentageOutOfRangeException;
@@ -37,7 +37,7 @@ impl PercentageOutOfRangeException {}
 
 #[derive(Debug, Clone)]
 #[php_class]
-#[php(name = "FeedCode\\Lattice\\Discount\\Percentage")]
+#[php(name = "Lattice\\Discount\\Percentage")]
 #[cfg_attr(php82, php(readonly))]
 pub struct Percentage {
     #[php(prop)]

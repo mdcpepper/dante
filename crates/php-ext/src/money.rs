@@ -11,7 +11,7 @@ use rusty_money::{Findable, Money as RustyMoney, MoneyError, iso::Currency};
 
 #[derive(Debug, Clone)]
 #[php_class]
-#[php(name = "FeedCode\\Lattice\\Money")]
+#[php(name = "Lattice\\Money")]
 pub struct Money {
     #[php(prop)]
     amount: i64,

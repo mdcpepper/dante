@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use FeedCode\Lattice\Money;
+use Lattice\Money;
 
 it("can be created with amount for valid currency", function (): void {
     assertLatticeExtensionLoaded();

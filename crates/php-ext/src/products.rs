@@ -14,7 +14,7 @@ use crate::{money::MoneyRef, reference_value::ReferenceValue};
 
 #[derive(Debug, Clone)]
 #[php_class]
-#[php(name = "FeedCode\\Lattice\\Product")]
+#[php(name = "Lattice\\Product")]
 pub struct Product {
     #[php(prop)]
     reference: ReferenceValue,

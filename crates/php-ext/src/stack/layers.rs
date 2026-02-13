@@ -18,7 +18,7 @@ use crate::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[php_enum]
-#[php(name = "FeedCode\\Lattice\\LayerOutput")]
+#[php(name = "Lattice\\LayerOutput")]
 pub enum LayerOutput {
     #[php(value = "pass_through")]
     PassThrough,
@@ -49,7 +49,7 @@ impl From<LayerOutput> for CoreOutputMode {
 
 #[derive(Debug, Clone)]
 #[php_class]
-#[php(name = "FeedCode\\Lattice\\Layer")]
+#[php(name = "Lattice\\Layer")]
 pub struct Layer {
     #[php(prop)]
     reference: ReferenceValue,

@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use FeedCode\Lattice\Money;
-use FeedCode\Lattice\Promotions\Budget;
+use Lattice\Money;
+use Lattice\Promotions\Budget;
 
 it("can be instantiated with an unlimited budget", function (): void {
     assertLatticeExtensionLoaded();

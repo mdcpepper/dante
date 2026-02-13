@@ -8,7 +8,7 @@ pub mod applications;
 
 #[derive(Debug, Clone)]
 #[php_class]
-#[php(name = "FeedCode\\Lattice\\Receipt")]
+#[php(name = "Lattice\\Receipt")]
 pub struct Receipt {
     #[php(prop)]
     subtotal: MoneyRef,
