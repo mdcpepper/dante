@@ -132,26 +132,6 @@ impl PercentageRef {
 
         Self(zv)
     }
-
-    fn try_to_dto(&self) -> Result<Percentage, PhpException> {
-        let Some(obj) = self.0.object() else {
-            return Err(PhpException::from_class::<InvalidPercentageException>(
-                "Percentage object is invalid".to_string(),
-            ));
-        };
-
-        let value = obj.get_property::<f64>("value").map_err(|_| {
-            PhpException::from_class::<InvalidPercentageException>(
-                "Percentage value is invalid".to_string(),
-            )
-        })?;
-
-        Percentage::from_decimal(value)
-    }
-
-    pub(super) fn try_to_core(&self) -> Result<CorePercentage, PhpException> {
-        self.try_to_dto()?.try_into()
-    }
 }
 
 impl<'a> FromZval<'a> for PercentageRef {
@@ -180,5 +160,51 @@ impl IntoZval for PercentageRef {
 
     fn set_zval(self, zv: &mut Zval, persistent: bool) -> ext_php_rs::error::Result<()> {
         self.0.set_zval(zv, persistent)
+    }
+}
+
+impl TryFrom<&PercentageRef> for Percentage {
+    type Error = PhpException;
+
+    fn try_from(value: &PercentageRef) -> Result<Self, Self::Error> {
+        let Some(obj) = value.0.object() else {
+            return Err(PhpException::from_class::<InvalidPercentageException>(
+                "Percentage object is invalid".to_string(),
+            ));
+        };
+
+        let amount = obj.get_property::<f64>("value").map_err(|_| {
+            PhpException::from_class::<InvalidPercentageException>(
+                "Percentage value is invalid".to_string(),
+            )
+        })?;
+
+        Percentage::from_decimal(amount)
+    }
+}
+
+impl TryFrom<PercentageRef> for Percentage {
+    type Error = PhpException;
+
+    fn try_from(value: PercentageRef) -> Result<Self, Self::Error> {
+        (&value).try_into()
+    }
+}
+
+impl TryFrom<&PercentageRef> for CorePercentage {
+    type Error = PhpException;
+
+    fn try_from(value: &PercentageRef) -> Result<Self, Self::Error> {
+        let percentage: Percentage = value.try_into()?;
+
+        percentage.try_into()
+    }
+}
+
+impl TryFrom<PercentageRef> for CorePercentage {
+    type Error = PhpException;
+
+    fn try_from(value: PercentageRef) -> Result<Self, Self::Error> {
+        (&value).try_into()
     }
 }

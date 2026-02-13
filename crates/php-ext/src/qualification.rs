@@ -178,28 +178,6 @@ impl QualificationRef {
 
         Self(zv)
     }
-
-    fn to_dto(&self) -> Qualification {
-        let Some(obj) = self.0.object() else {
-            return Qualification::match_all();
-        };
-
-        let op = obj
-            .get_property::<BoolOp>("op")
-            .ok()
-            .unwrap_or(BoolOp::AndOp);
-
-        let rules = obj
-            .get_property::<Vec<QualificationRuleRef>>("rules")
-            .ok()
-            .unwrap_or_default();
-
-        Qualification { op, rules }
-    }
-
-    fn try_to_core(&self) -> Result<CoreQualification<StringTagCollection>, PhpException> {
-        self.to_dto().try_into()
-    }
 }
 
 impl<'a> FromZval<'a> for QualificationRef {
@@ -243,33 +221,6 @@ impl QualificationRuleRef {
 
         Self(zv)
     }
-
-    fn to_dto(&self) -> Rule {
-        let Some(obj) = self.0.object() else {
-            return Rule::has_all(None);
-        };
-
-        let kind = obj
-            .get_property::<RuleKind>("kind")
-            .ok()
-            .unwrap_or(RuleKind::HasAll);
-
-        let tags = obj
-            .get_property::<HashSet<String>>("tags")
-            .ok()
-            .unwrap_or_default();
-
-        let group = obj
-            .get_property::<Option<QualificationRef>>("group")
-            .ok()
-            .unwrap_or_default();
-
-        Rule { kind, tags, group }
-    }
-
-    fn try_to_core(&self) -> Result<CoreQualificationRule<StringTagCollection>, PhpException> {
-        self.to_dto().try_into()
-    }
 }
 
 impl<'a> FromZval<'a> for QualificationRuleRef {
@@ -293,12 +244,109 @@ impl Clone for QualificationRuleRef {
 }
 
 impl IntoZval for QualificationRuleRef {
-    const TYPE: DataType = DataType::Object(Some(<Rule as RegisteredClass>::CLASS_NAME));
-
     const NULLABLE: bool = false;
+    const TYPE: DataType = DataType::Object(Some(<Rule as RegisteredClass>::CLASS_NAME));
 
     fn set_zval(self, zv: &mut Zval, persistent: bool) -> ext_php_rs::error::Result<()> {
         self.0.set_zval(zv, persistent)
+    }
+}
+
+impl TryFrom<&QualificationRef> for Qualification {
+    type Error = PhpException;
+
+    fn try_from(value: &QualificationRef) -> Result<Self, Self::Error> {
+        let Some(obj) = value.0.object() else {
+            return Err(PhpException::default(
+                "Qualification object is invalid.".to_string(),
+            ));
+        };
+
+        let op = obj
+            .get_property::<BoolOp>("op")
+            .map_err(|_| PhpException::default("Qualification op is invalid.".to_string()))?;
+
+        let rules = obj
+            .get_property::<Vec<QualificationRuleRef>>("rules")
+            .map_err(|_| PhpException::default("Qualification rules are invalid.".to_string()))?;
+
+        Ok(Qualification { op, rules })
+    }
+}
+
+impl TryFrom<QualificationRef> for Qualification {
+    type Error = PhpException;
+
+    fn try_from(value: QualificationRef) -> Result<Self, Self::Error> {
+        (&value).try_into()
+    }
+}
+
+impl TryFrom<&QualificationRef> for CoreQualification<StringTagCollection> {
+    type Error = PhpException;
+
+    fn try_from(value: &QualificationRef) -> Result<Self, Self::Error> {
+        let qualification: Qualification = value.try_into()?;
+
+        qualification.try_into()
+    }
+}
+
+impl TryFrom<QualificationRef> for CoreQualification<StringTagCollection> {
+    type Error = PhpException;
+
+    fn try_from(value: QualificationRef) -> Result<Self, Self::Error> {
+        (&value).try_into()
+    }
+}
+
+impl TryFrom<&QualificationRuleRef> for Rule {
+    type Error = PhpException;
+
+    fn try_from(value: &QualificationRuleRef) -> Result<Self, Self::Error> {
+        let Some(obj) = value.0.object() else {
+            return Err(PhpException::default("Rule object is invalid.".to_string()));
+        };
+
+        let kind = obj
+            .get_property::<RuleKind>("kind")
+            .map_err(|_| PhpException::default("Rule kind is invalid.".to_string()))?;
+
+        let tags = obj
+            .get_property::<HashSet<String>>("tags")
+            .map_err(|_| PhpException::default("Rule tags are invalid.".to_string()))?;
+
+        let group = obj
+            .get_property::<Option<QualificationRef>>("group")
+            .map_err(|_| PhpException::default("Rule group is invalid.".to_string()))?;
+
+        Ok(Rule { kind, tags, group })
+    }
+}
+
+impl TryFrom<QualificationRuleRef> for Rule {
+    type Error = PhpException;
+
+    fn try_from(value: QualificationRuleRef) -> Result<Self, Self::Error> {
+        (&value).try_into()
+    }
+}
+
+impl TryFrom<&QualificationRuleRef> for CoreQualificationRule<StringTagCollection> {
+    type Error = PhpException;
+
+    fn try_from(value: &QualificationRuleRef) -> Result<Self, Self::Error> {
+        let rule: Rule = value.try_into()?;
+
+        rule.try_into()
+    }
+}
+
+impl TryFrom<QualificationRuleRef> for CoreQualificationRule<StringTagCollection> {
+    type Error = PhpException;
+
+    fn try_from(value: QualificationRuleRef) -> Result<Self, Self::Error> {
+        (&value).try_into()
     }
 }
 
@@ -311,7 +359,7 @@ impl TryFrom<Qualification> for CoreQualification<StringTagCollection> {
         let mut rules = SmallVec::<[CoreQualificationRule<StringTagCollection>; 2]>::new();
 
         for rule in qualification.rules {
-            rules.push(rule.try_to_core()?);
+            rules.push(rule.try_into()?);
         }
 
         Ok(CoreQualification::new(op, rules))
@@ -339,7 +387,7 @@ impl TryFrom<Rule> for CoreQualificationRule<StringTagCollection> {
                     ));
                 };
 
-                Ok(CoreQualificationRule::Group(Box::new(group.try_to_core()?)))
+                Ok(CoreQualificationRule::Group(Box::new(group.try_into()?)))
             }
         }
     }

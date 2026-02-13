@@ -105,6 +105,36 @@ impl IntoZval for MoneyRef {
     }
 }
 
+impl TryFrom<&MoneyRef> for Money {
+    type Error = PhpException;
+
+    fn try_from(value: &MoneyRef) -> Result<Self, Self::Error> {
+        let Some(obj) = value.0.object() else {
+            return Err(PhpException::default(
+                "Money object is invalid.".to_string(),
+            ));
+        };
+
+        let amount = obj
+            .get_property::<i64>("amount")
+            .map_err(|_| PhpException::default("Money amount is invalid.".to_string()))?;
+
+        let currency = obj
+            .get_property::<String>("currency")
+            .map_err(|_| PhpException::default("Money currency is invalid.".to_string()))?;
+
+        Money::__construct(amount, currency)
+    }
+}
+
+impl TryFrom<MoneyRef> for Money {
+    type Error = PhpException;
+
+    fn try_from(value: MoneyRef) -> Result<Self, Self::Error> {
+        (&value).try_into()
+    }
+}
+
 impl TryFrom<MoneyRef> for RustyMoney<'static, Currency> {
     type Error = MoneyError;
 

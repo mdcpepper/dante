@@ -103,10 +103,53 @@ impl Clone for ProductRef {
 }
 
 impl IntoZval for ProductRef {
-    const TYPE: DataType = DataType::Object(Some(<Product as RegisteredClass>::CLASS_NAME));
     const NULLABLE: bool = false;
+    const TYPE: DataType = DataType::Object(Some(<Product as RegisteredClass>::CLASS_NAME));
 
     fn set_zval(self, zv: &mut Zval, persistent: bool) -> ext_php_rs::error::Result<()> {
         self.0.set_zval(zv, persistent)
+    }
+}
+
+impl TryFrom<&ProductRef> for Product {
+    type Error = PhpException;
+
+    fn try_from(value: &ProductRef) -> Result<Self, Self::Error> {
+        let Some(obj) = value.0.object() else {
+            return Err(PhpException::default(
+                "Product object is invalid.".to_string(),
+            ));
+        };
+
+        let key = obj
+            .get_property::<ReferenceValue>("key")
+            .map_err(|_| PhpException::default("Product key is invalid.".to_string()))?;
+
+        let name = obj
+            .get_property::<String>("name")
+            .map_err(|_| PhpException::default("Product name is invalid.".to_string()))?;
+
+        let price = obj
+            .get_property::<MoneyRef>("price")
+            .map_err(|_| PhpException::default("Product price is invalid.".to_string()))?;
+
+        let tags = obj
+            .get_property::<HashSet<String>>("tags")
+            .map_err(|_| PhpException::default("Product tags are invalid.".to_string()))?;
+
+        Ok(Product {
+            key,
+            name,
+            price,
+            tags,
+        })
+    }
+}
+
+impl TryFrom<ProductRef> for Product {
+    type Error = PhpException;
+
+    fn try_from(value: ProductRef) -> Result<Self, Self::Error> {
+        (&value).try_into()
     }
 }

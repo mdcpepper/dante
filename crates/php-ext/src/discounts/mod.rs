@@ -130,6 +130,72 @@ impl IntoZval for SimpleDiscountRef {
     }
 }
 
+impl TryFrom<&SimpleDiscountRef> for SimpleDiscount {
+    type Error = PhpException;
+
+    fn try_from(value: &SimpleDiscountRef) -> Result<Self, Self::Error> {
+        let Some(obj) = value.0.object() else {
+            return Err(PhpException::from_class::<InvalidDiscountException>(
+                "SimpleDiscount object is invalid".to_string(),
+            ));
+        };
+
+        let kind = obj.get_property::<DiscountKind>("kind").map_err(|_| {
+            PhpException::from_class::<InvalidDiscountException>(
+                "SimpleDiscount kind is invalid".to_string(),
+            )
+        })?;
+
+        let percentage = obj
+            .get_property::<Option<PercentageRef>>("percentage")
+            .map_err(|_| {
+                PhpException::from_class::<InvalidDiscountException>(
+                    "SimpleDiscount percentage is invalid".to_string(),
+                )
+            })?;
+
+        let amount = obj
+            .get_property::<Option<MoneyRef>>("amount")
+            .map_err(|_| {
+                PhpException::from_class::<InvalidDiscountException>(
+                    "SimpleDiscount amount is invalid".to_string(),
+                )
+            })?;
+
+        Ok(SimpleDiscount {
+            kind,
+            percentage,
+            amount,
+        })
+    }
+}
+
+impl TryFrom<SimpleDiscountRef> for SimpleDiscount {
+    type Error = PhpException;
+
+    fn try_from(value: SimpleDiscountRef) -> Result<Self, Self::Error> {
+        (&value).try_into()
+    }
+}
+
+impl TryFrom<&SimpleDiscountRef> for CoreSimpleDiscount<'static> {
+    type Error = PhpException;
+
+    fn try_from(value: &SimpleDiscountRef) -> Result<Self, Self::Error> {
+        let discount: SimpleDiscount = value.try_into()?;
+
+        discount.try_into()
+    }
+}
+
+impl TryFrom<SimpleDiscountRef> for CoreSimpleDiscount<'static> {
+    type Error = PhpException;
+
+    fn try_from(value: SimpleDiscountRef) -> Result<Self, Self::Error> {
+        (&value).try_into()
+    }
+}
+
 impl TryFrom<SimpleDiscount> for CoreSimpleDiscount<'static> {
     type Error = PhpException;
 
@@ -142,7 +208,7 @@ impl TryFrom<SimpleDiscount> for CoreSimpleDiscount<'static> {
                     ));
                 };
 
-                Ok(CoreSimpleDiscount::PercentageOff(percentage.try_to_core()?))
+                Ok(CoreSimpleDiscount::PercentageOff(percentage.try_into()?))
             }
             DiscountKind::AmountOverride => Ok(CoreSimpleDiscount::AmountOverride(require_money(
                 discount.amount,

@@ -16,7 +16,7 @@ if (!class_exists(Money::class)) {
 if (!class_exists(Product::class)) {
     class Product
     {
-        public mixed $reference;
+        public mixed $key;
         public string $name;
         public \FeedCode\Lattice\Money $price;
 
@@ -27,7 +27,7 @@ if (!class_exists(Product::class)) {
          * @param string[]|null $tags
          */
         public function __construct(
-            mixed $reference,
+            mixed $key,
             string $name,
             \FeedCode\Lattice\Money $price,
             ?array $tags = [],
@@ -38,7 +38,7 @@ if (!class_exists(Product::class)) {
 if (!class_exists(Item::class)) {
     class Item
     {
-        public mixed $id;
+        public mixed $key;
         public string $name;
         public \FeedCode\Lattice\Money $price;
         public Product $product;
@@ -50,7 +50,7 @@ if (!class_exists(Item::class)) {
          * @param string[]|null $tags
          */
         public function __construct(
-            mixed $id,
+            mixed $key,
             string $name,
             \FeedCode\Lattice\Money $price,
             Product $product,
@@ -58,7 +58,7 @@ if (!class_exists(Item::class)) {
         ) {}
 
         public static function fromProduct(
-            mixed $reference,
+            mixed $key,
             Product $product,
         ): self {}
     }
@@ -202,5 +202,48 @@ if (!class_exists(SimpleDiscount::class)) {
         public static function amountOff(
             \FeedCode\Lattice\Money $amount,
         ): self {}
+    }
+}
+
+namespace FeedCode\Lattice\Promotions;
+
+use FeedCode\Lattice\Discount\SimpleDiscount;
+use FeedCode\Lattice\Qualification;
+
+if (!class_exists(Budget::class)) {
+    class Budget
+    {
+        public ?int $applicationLimit;
+        public ?\FeedCode\Lattice\Money $monetaryLimit;
+
+        public static function unlimited(): self {}
+
+        public static function withApplicationLimit(int $limit): self {}
+
+        public static function withMonetaryLimit(
+            \FeedCode\Lattice\Money $limit,
+        ): self {}
+
+        public static function withBothLimits(
+            int $monetaryLimit,
+            \FeedCode\Lattice\Money $limit,
+        ): self {}
+    }
+}
+
+if (!class_exists(DirectDiscount::class)) {
+    class DirectDiscount
+    {
+        public mixed $key;
+        public Qualification $qualification;
+        public SimpleDiscount $discount;
+        public Budget $budget;
+
+        public function __construct(
+            mixed $key,
+            Qualification $qualification,
+            SimpleDiscount $discount,
+            Budget $budget,
+        ) {}
     }
 }

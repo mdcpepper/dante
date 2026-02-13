@@ -10,6 +10,7 @@ use crate::{
     items::Item,
     money::Money,
     products::Product,
+    promotions::{budgets::Budget, direct_discount::DirectDiscountPromotion},
     qualification::{BoolOp, Qualification, Rule, RuleKind},
 };
 
@@ -17,6 +18,7 @@ pub mod discounts;
 pub mod items;
 pub mod money;
 pub mod products;
+pub mod promotions;
 pub mod qualification;
 pub mod reference_value;
 
@@ -36,4 +38,6 @@ pub fn get_module(module: ModuleBuilder) -> ModuleBuilder {
         .class::<Percentage>()
         .enumeration::<DiscountKind>()
         .class::<SimpleDiscount>()
+        .class::<Budget>()
+        .class::<DirectDiscountPromotion>()
 }
