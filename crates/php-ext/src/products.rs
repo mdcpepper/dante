@@ -17,7 +17,7 @@ use crate::{money::MoneyRef, reference_value::ReferenceValue};
 #[php(name = "FeedCode\\Lattice\\Product")]
 pub struct Product {
     #[php(prop)]
-    key: ReferenceValue,
+    reference: ReferenceValue,
 
     #[php(prop)]
     name: String,
@@ -32,13 +32,13 @@ pub struct Product {
 #[php_impl]
 impl Product {
     pub fn __construct(
-        key: ReferenceValue,
+        reference: ReferenceValue,
         name: String,
         price: MoneyRef,
         tags: Option<HashSet<String>>,
     ) -> Self {
         Self {
-            key,
+            reference,
             name,
             price,
             tags: tags.unwrap_or_default(),
@@ -121,9 +121,9 @@ impl TryFrom<&ProductRef> for Product {
             ));
         };
 
-        let key = obj
-            .get_property::<ReferenceValue>("key")
-            .map_err(|_| PhpException::default("Product key is invalid.".to_string()))?;
+        let reference = obj
+            .get_property::<ReferenceValue>("reference")
+            .map_err(|_| PhpException::default("Product reference is invalid.".to_string()))?;
 
         let name = obj
             .get_property::<String>("name")
@@ -138,7 +138,7 @@ impl TryFrom<&ProductRef> for Product {
             .map_err(|_| PhpException::default("Product tags are invalid.".to_string()))?;
 
         Ok(Product {
-            key,
+            reference,
             name,
             price,
             tags,

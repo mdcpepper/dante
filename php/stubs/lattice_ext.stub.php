@@ -16,7 +16,7 @@ if (!class_exists(Money::class)) {
 if (!class_exists(Product::class)) {
     class Product
     {
-        public mixed $key;
+        public mixed $reference;
         public string $name;
         public \FeedCode\Lattice\Money $price;
 
@@ -27,7 +27,7 @@ if (!class_exists(Product::class)) {
          * @param string[]|null $tags
          */
         public function __construct(
-            mixed $key,
+            mixed $reference,
             string $name,
             \FeedCode\Lattice\Money $price,
             ?array $tags = [],
@@ -38,7 +38,7 @@ if (!class_exists(Product::class)) {
 if (!class_exists(Item::class)) {
     class Item
     {
-        public mixed $key;
+        public mixed $reference;
         public string $name;
         public \FeedCode\Lattice\Money $price;
         public Product $product;
@@ -50,7 +50,7 @@ if (!class_exists(Item::class)) {
          * @param string[]|null $tags
          */
         public function __construct(
-            mixed $key,
+            mixed $reference,
             string $name,
             \FeedCode\Lattice\Money $price,
             Product $product,
@@ -58,7 +58,7 @@ if (!class_exists(Item::class)) {
         ) {}
 
         public static function fromProduct(
-            mixed $key,
+            mixed $reference,
             Product $product,
         ): self {}
     }
@@ -69,13 +69,16 @@ if (!enum_exists(LayerOutput::class)) {
     {
         case PassThrough = "pass_through";
         case Split = "split";
+
+        public static function passThrough(): self {}
+        public static function split(): self {}
     }
 }
 
 if (!class_exists(Layer::class)) {
     class Layer
     {
-        public mixed $key;
+        public mixed $reference;
         public LayerOutput $output;
 
         /** @var \FeedCode\Lattice\Promotions\Promotion[] */
@@ -85,9 +88,9 @@ if (!class_exists(Layer::class)) {
          * @param \FeedCode\Lattice\Promotions\Promotion[]|null $promotions
          */
         public function __construct(
-            mixed $key,
+            mixed $reference,
             LayerOutput $output,
-            ?array $promotions = [],
+            array $promotions,
         ) {}
     }
 }
@@ -99,11 +102,78 @@ if (!class_exists(Stack::class)) {
         public array $layers;
 
         /**
-         * @param Layer[]|null $layers
+         * @param Layer[] $layers
          */
-        public function __construct(?array $layers = []) {}
+        public function __construct(array $layers = []) {}
 
         public function validateGraph(): bool {}
+
+        /**
+         * @param Item[] $items
+         */
+        public function process(array $items): Receipt {}
+    }
+}
+
+if (!class_exists(StackBuilder::class)) {
+    class StackBuilder
+    {
+        /** @var Layer[] */
+        public array $layers;
+
+        public ?Layer $rootLayer;
+
+        public function __construct() {}
+
+        public function addLayer(Layer $layer): Layer {}
+
+        public function setRoot(Layer $layer): void {}
+
+        public function build(): Stack {}
+    }
+}
+
+if (!class_exists(PromotionApplication::class)) {
+    class PromotionApplication
+    {
+        public \FeedCode\Lattice\Promotions\Promotion $promotion;
+        public Item $item;
+        public int $bundleId;
+        public Money $originalPrice;
+        public Money $finalPrice;
+
+        public function __construct(
+            \FeedCode\Lattice\Promotions\Promotion $promotion,
+            Item $item,
+            int $bundleId,
+            Money $originalPrice,
+            Money $finalPrice,
+        ) {}
+    }
+}
+
+if (!class_exists(Receipt::class)) {
+    class Receipt
+    {
+        public Money $subtotal;
+        public Money $total;
+
+        /** @var Item[] */
+        public array $fullPriceItems;
+
+        /** @var PromotionApplication[] */
+        public array $promotionApplications;
+
+        /**
+         * @param Item[]|null $fullPriceItems
+         * @param PromotionApplication[]|null $promotionApplications
+         */
+        public function __construct(
+            Money $subtotal,
+            Money $total,
+            ?array $fullPriceItems = [],
+            ?array $promotionApplications = [],
+        ) {}
     }
 }
 
@@ -289,13 +359,13 @@ if (!interface_exists(Promotion::class)) {
 if (!class_exists(DirectDiscount::class)) {
     class DirectDiscount implements Promotion
     {
-        public mixed $key;
+        public mixed $reference;
         public Qualification $qualification;
         public SimpleDiscount $discount;
         public Budget $budget;
 
         public function __construct(
-            mixed $key,
+            mixed $reference,
             Qualification $qualification,
             SimpleDiscount $discount,
             Budget $budget,

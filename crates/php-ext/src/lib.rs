@@ -14,8 +14,9 @@ use crate::{
         budgets::Budget, direct_discount::DirectDiscountPromotion, interface::PhpInterfacePromotion,
     },
     qualification::{BoolOp, Qualification, Rule, RuleKind},
+    receipt::{Receipt, applications::PromotionApplication},
     stack::{
-        InvalidStackException, Stack,
+        InvalidStackException, Stack, StackBuilder,
         layers::{Layer, LayerOutput},
     },
 };
@@ -26,6 +27,7 @@ pub mod money;
 pub mod products;
 pub mod promotions;
 pub mod qualification;
+pub mod receipt;
 pub mod reference_value;
 pub mod stack;
 
@@ -51,5 +53,8 @@ pub fn get_module(module: ModuleBuilder) -> ModuleBuilder {
         .enumeration::<LayerOutput>()
         .class::<InvalidStackException>()
         .class::<Layer>()
+        .class::<StackBuilder>()
         .class::<Stack>()
+        .class::<PromotionApplication>()
+        .class::<Receipt>()
 }

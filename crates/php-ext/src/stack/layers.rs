@@ -27,6 +27,17 @@ pub enum LayerOutput {
     Split,
 }
 
+#[php_impl]
+impl LayerOutput {
+    pub fn pass_through() -> Self {
+        Self::PassThrough
+    }
+
+    pub fn split() -> Self {
+        Self::Split
+    }
+}
+
 impl From<LayerOutput> for CoreOutputMode {
     fn from(value: LayerOutput) -> Self {
         match value {
@@ -41,7 +52,7 @@ impl From<LayerOutput> for CoreOutputMode {
 #[php(name = "FeedCode\\Lattice\\Layer")]
 pub struct Layer {
     #[php(prop)]
-    key: ReferenceValue,
+    reference: ReferenceValue,
 
     #[php(prop)]
     output: LayerOutput,
@@ -53,14 +64,14 @@ pub struct Layer {
 #[php_impl]
 impl Layer {
     pub fn __construct(
-        key: ReferenceValue,
+        reference: ReferenceValue,
         output: LayerOutput,
-        promotions: Option<Vec<DirectDiscountPromotionRef>>,
+        promotions: Vec<DirectDiscountPromotionRef>,
     ) -> Self {
         Self {
-            key,
+            reference,
             output,
-            promotions: promotions.unwrap_or_default(),
+            promotions,
         }
     }
 }
@@ -87,6 +98,10 @@ impl LayerRef {
             .expect("layer should always convert to object zval");
 
         Self(zv)
+    }
+
+    pub(crate) fn is_identical(&self, other: &Self) -> bool {
+        self.0.is_identical(&other.0)
     }
 }
 
@@ -129,11 +144,13 @@ impl TryFrom<&LayerRef> for Layer {
             ));
         };
 
-        let key = obj.get_property::<ReferenceValue>("key").map_err(|_| {
-            PhpException::from_class::<InvalidStackException>(
-                "Layer key property is invalid.".to_string(),
-            )
-        })?;
+        let reference = obj
+            .get_property::<ReferenceValue>("reference")
+            .map_err(|_| {
+                PhpException::from_class::<InvalidStackException>(
+                    "Layer reference property is invalid.".to_string(),
+                )
+            })?;
 
         let output = obj.get_property::<LayerOutput>("output").map_err(|_| {
             PhpException::from_class::<InvalidStackException>(
@@ -150,7 +167,7 @@ impl TryFrom<&LayerRef> for Layer {
             })?;
 
         Ok(Self {
-            key,
+            reference,
             output,
             promotions,
         })

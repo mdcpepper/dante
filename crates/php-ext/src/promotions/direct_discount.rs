@@ -8,6 +8,7 @@ use ext_php_rs::{
     prelude::*,
     types::Zval,
 };
+
 use lattice::{
     promotions::{PromotionKey, types::DirectDiscountPromotion as CoreDirectDiscountPromotion},
     tags::string::StringTagCollection,
@@ -26,7 +27,7 @@ use crate::{
 #[php(implements(PhpInterfacePromotion))]
 pub struct DirectDiscountPromotion {
     #[php(prop)]
-    key: ReferenceValue,
+    reference: ReferenceValue,
 
     #[php(prop)]
     qualification: QualificationRef,
@@ -41,13 +42,13 @@ pub struct DirectDiscountPromotion {
 #[php_impl]
 impl DirectDiscountPromotion {
     pub fn __construct(
-        key: ReferenceValue,
+        reference: ReferenceValue,
         qualification: QualificationRef,
         discount: SimpleDiscountRef,
         budget: BudgetRef,
     ) -> Self {
         Self {
-            key,
+            reference,
             qualification,
             discount,
             budget,
@@ -113,9 +114,11 @@ impl TryFrom<&DirectDiscountPromotionRef> for DirectDiscountPromotion {
             ));
         };
 
-        let key = obj.get_property::<ReferenceValue>("key").map_err(|_| {
-            PhpException::default("DirectDiscount key property is invalid.".to_string())
-        })?;
+        let reference = obj
+            .get_property::<ReferenceValue>("reference")
+            .map_err(|_| {
+                PhpException::default("DirectDiscount reference property is invalid.".to_string())
+            })?;
 
         let qualification = obj
             .get_property::<QualificationRef>("qualification")
@@ -136,7 +139,7 @@ impl TryFrom<&DirectDiscountPromotionRef> for DirectDiscountPromotion {
         })?;
 
         Ok(DirectDiscountPromotion {
-            key,
+            reference,
             qualification,
             discount,
             budget,
@@ -153,13 +156,12 @@ impl TryFrom<DirectDiscountPromotionRef> for DirectDiscountPromotion {
 }
 
 impl DirectDiscountPromotion {
-    #[allow(dead_code)]
-    pub(crate) fn try_to_core_with_key(
+    pub(crate) fn try_to_core_with_reference(
         &self,
-        key: PromotionKey,
+        reference: PromotionKey,
     ) -> Result<CoreDirectDiscountPromotion<'static, StringTagCollection>, PhpException> {
         Ok(CoreDirectDiscountPromotion::new(
-            key,
+            reference,
             (&self.qualification).try_into()?,
             (&self.discount).try_into()?,
             (&self.budget).try_into()?,
