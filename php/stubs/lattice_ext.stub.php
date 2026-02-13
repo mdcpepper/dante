@@ -92,6 +92,29 @@ if (!class_exists(Layer::class)) {
     }
 }
 
+if (!class_exists(Stack::class)) {
+    class Stack
+    {
+        /** @var Layer[] */
+        public array $layers;
+
+        /**
+         * @param Layer[]|null $layers
+         */
+        public function __construct(?array $layers = []) {}
+
+        public function validateGraph(): bool {}
+    }
+}
+
+namespace FeedCode\Lattice\Stack;
+
+if (!class_exists(InvalidStackException::class)) {
+    class InvalidStackException extends \Exception {}
+}
+
+namespace FeedCode\Lattice;
+
 if (!class_exists(Qualification::class)) {
     class Qualification
     {

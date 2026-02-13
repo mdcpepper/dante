@@ -9,17 +9,14 @@ use ext_php_rs::{
     types::Zval,
 };
 
-use lattice::{
-    graph::OutputMode as CoreOutputMode,
-    promotions::{Promotion, PromotionKey},
-};
+use lattice::graph::OutputMode as CoreOutputMode;
 
 use crate::{
-    promotions::direct_discount::{DirectDiscountPromotion, DirectDiscountPromotionRef},
-    reference_value::ReferenceValue,
+    promotions::direct_discount::DirectDiscountPromotionRef, reference_value::ReferenceValue,
+    stack::InvalidStackException,
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[php_enum]
 #[php(name = "FeedCode\\Lattice\\LayerOutput")]
 pub enum LayerOutput {
@@ -50,7 +47,7 @@ pub struct Layer {
     output: LayerOutput,
 
     #[php(prop)]
-    promotions: Vec<LayerPromotionRef>,
+    promotions: Vec<DirectDiscountPromotionRef>,
 }
 
 #[php_impl]
@@ -58,13 +55,23 @@ impl Layer {
     pub fn __construct(
         key: ReferenceValue,
         output: LayerOutput,
-        promotions: Option<Vec<LayerPromotionRef>>,
+        promotions: Option<Vec<DirectDiscountPromotionRef>>,
     ) -> Self {
         Self {
             key,
             output,
             promotions: promotions.unwrap_or_default(),
         }
+    }
+}
+
+impl Layer {
+    pub(crate) fn output(&self) -> LayerOutput {
+        self.output
+    }
+
+    pub(crate) fn promotions(&self) -> &[DirectDiscountPromotionRef] {
+        &self.promotions
     }
 }
 
@@ -117,23 +124,29 @@ impl TryFrom<&LayerRef> for Layer {
 
     fn try_from(value: &LayerRef) -> Result<Self, Self::Error> {
         let Some(obj) = value.0.object() else {
-            return Err(PhpException::default(
+            return Err(PhpException::from_class::<InvalidStackException>(
                 "Layer object is invalid.".to_string(),
             ));
         };
 
-        let key = obj
-            .get_property::<ReferenceValue>("key")
-            .map_err(|_| PhpException::default("Layer key property is invalid.".to_string()))?;
+        let key = obj.get_property::<ReferenceValue>("key").map_err(|_| {
+            PhpException::from_class::<InvalidStackException>(
+                "Layer key property is invalid.".to_string(),
+            )
+        })?;
 
-        let output = obj
-            .get_property::<LayerOutput>("output")
-            .map_err(|_| PhpException::default("Layer output property is invalid.".to_string()))?;
+        let output = obj.get_property::<LayerOutput>("output").map_err(|_| {
+            PhpException::from_class::<InvalidStackException>(
+                "Layer output property is invalid.".to_string(),
+            )
+        })?;
 
         let promotions = obj
-            .get_property::<Vec<LayerPromotionRef>>("promotions")
+            .get_property::<Vec<DirectDiscountPromotionRef>>("promotions")
             .map_err(|_| {
-                PhpException::default("Layer promotions property is invalid.".to_string())
+                PhpException::from_class::<InvalidStackException>(
+                    "Layer promotions property is invalid.".to_string(),
+                )
             })?;
 
         Ok(Self {
@@ -149,70 +162,5 @@ impl TryFrom<LayerRef> for Layer {
 
     fn try_from(value: LayerRef) -> Result<Self, Self::Error> {
         (&value).try_into()
-    }
-}
-
-#[derive(Debug)]
-pub struct LayerPromotionRef(Zval);
-
-impl LayerPromotionRef {
-    #[allow(dead_code)]
-    pub(crate) fn try_to_core_with_key(
-        &self,
-        key: PromotionKey,
-    ) -> Result<Promotion<'static>, PhpException> {
-        let Some(obj) = self.0.object() else {
-            return Err(PhpException::default(
-                "Layer promotion object is invalid.".to_string(),
-            ));
-        };
-
-        if obj.is_instance::<DirectDiscountPromotion>() {
-            let direct_ref = <DirectDiscountPromotionRef as FromZval>::from_zval(&self.0)
-                .ok_or_else(|| {
-                    PhpException::default(
-                        "DirectDiscount promotion could not be decoded from layer.".to_string(),
-                    )
-                })?;
-
-            let direct: DirectDiscountPromotion = (&direct_ref).try_into()?;
-
-            return Ok(lattice::promotions::promotion(
-                direct.try_to_core_with_key(key)?,
-            ));
-        }
-
-        Err(PhpException::default(
-            "Unsupported promotion type in layer promotions.".to_string(),
-        ))
-    }
-}
-
-impl<'a> FromZval<'a> for LayerPromotionRef {
-    const TYPE: DataType = DataType::Object(None);
-
-    fn from_zval(zval: &'a Zval) -> Option<Self> {
-        let obj = zval.object()?;
-
-        if obj.is_instance::<DirectDiscountPromotion>() {
-            Some(Self(zval.shallow_clone()))
-        } else {
-            None
-        }
-    }
-}
-
-impl Clone for LayerPromotionRef {
-    fn clone(&self) -> Self {
-        Self(self.0.shallow_clone())
-    }
-}
-
-impl IntoZval for LayerPromotionRef {
-    const TYPE: DataType = DataType::Object(None);
-    const NULLABLE: bool = false;
-
-    fn set_zval(self, zv: &mut Zval, persistent: bool) -> ext_php_rs::error::Result<()> {
-        self.0.set_zval(zv, persistent)
     }
 }

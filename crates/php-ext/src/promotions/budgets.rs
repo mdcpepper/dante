@@ -110,13 +110,13 @@ impl TryFrom<&BudgetRef> for Budget {
         };
 
         let application_limit = obj
-            .get_property::<Option<i64>>("application_limit")
+            .get_property::<Option<i64>>("applicationLimit")
             .map_err(|_| {
                 PhpException::default("Budget application_limit is invalid.".to_string())
             })?;
 
         let monetary_limit = obj
-            .get_property::<Option<MoneyRef>>("monetary_limit")
+            .get_property::<Option<MoneyRef>>("monetaryLimit")
             .map_err(|_| PhpException::default("Budget monetary_limit is invalid.".to_string()))?;
 
         Ok(Budget {

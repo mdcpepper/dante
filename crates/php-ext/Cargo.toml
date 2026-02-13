@@ -15,6 +15,7 @@ ext-php-rs = "0.15.6"
 lattice = { path = "../core" }
 rusty-money.workspace = true
 smallvec.workspace = true
+slotmap.workspace = true
 testresult.workspace = true
 thiserror.workspace = true
 

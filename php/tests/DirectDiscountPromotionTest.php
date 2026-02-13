@@ -9,6 +9,19 @@ use FeedCode\Lattice\Promotions\DirectDiscount;
 use FeedCode\Lattice\Promotions\Promotion;
 use FeedCode\Lattice\Qualification;
 
+it("implements Promotion interface", function () {
+    assertLatticeExtensionLoaded();
+
+    $promotion = new DirectDiscount(
+        key: 123,
+        qualification: Qualification::matchAll(),
+        discount: SimpleDiscount::amountOff(new Money(123, "GBP")),
+        budget: Budget::unlimited(),
+    );
+
+    expect($promotion)->toBeInstanceOf(Promotion::class);
+});
+
 it("can be instantiated", function () {
     assertLatticeExtensionLoaded();
 

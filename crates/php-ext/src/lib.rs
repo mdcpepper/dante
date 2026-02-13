@@ -14,7 +14,10 @@ use crate::{
         budgets::Budget, direct_discount::DirectDiscountPromotion, interface::PhpInterfacePromotion,
     },
     qualification::{BoolOp, Qualification, Rule, RuleKind},
-    stack::layers::{Layer, LayerOutput},
+    stack::{
+        InvalidStackException, Stack,
+        layers::{Layer, LayerOutput},
+    },
 };
 
 pub mod discounts;
@@ -46,5 +49,7 @@ pub fn get_module(module: ModuleBuilder) -> ModuleBuilder {
         .interface::<PhpInterfacePromotion>()
         .class::<DirectDiscountPromotion>()
         .enumeration::<LayerOutput>()
+        .class::<InvalidStackException>()
         .class::<Layer>()
+        .class::<Stack>()
 }

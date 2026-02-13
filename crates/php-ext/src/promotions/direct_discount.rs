@@ -13,9 +13,10 @@ use lattice::{
     tags::string::StringTagCollection,
 };
 
-use crate::promotions::interface::PhpInterfacePromotion;
 use crate::{
-    discounts::SimpleDiscountRef, promotions::budgets::BudgetRef, qualification::QualificationRef,
+    discounts::SimpleDiscountRef,
+    promotions::{budgets::BudgetRef, interface::PhpInterfacePromotion},
+    qualification::QualificationRef,
     reference_value::ReferenceValue,
 };
 
