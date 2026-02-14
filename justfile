@@ -4,6 +4,9 @@ ext_so := "target/debug/liblattice.so"
 
 default: test
 
+cloc:
+    cloc fixtures crates php --exclude_dir vendor,dist
+
 test-rust:
     cargo test --all-features --workspace --exclude lattice-php-ext
 

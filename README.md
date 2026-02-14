@@ -964,7 +964,7 @@ $receipt = $builder->build()->process([$item]);
 Current limitations:
 
 - Only linear stacks are supported (no split outputs).
-- Only `DirectDiscount` and `PositionalDiscount` promotions are supported.
+- Only `DirectDiscount`, `MixAndMatchDiscountPromotion`, `PositionalDiscount` promotions are supported.
 
 ## WASM Demo
 

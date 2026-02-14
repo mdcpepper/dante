@@ -10,7 +10,7 @@ products:
     price: 1.00 GBP
 
   enrgy-drink:
-    name: Energy Drink 250Ml
+    name: Energy Drink 250ml
     tags: [drink]
     price: 1.70 GBP
 
@@ -45,9 +45,9 @@ products:
     price: 1.99 GBP
 
   magnesium:
-     name: Magnesium 180 Tablets
-     tags: [vitamins, staff-discount-exempt]
-     price: 12.85 GBP
+    name: Magnesium 180 Tablets
+    tags: [vitamins, staff-discount-exempt]
+    price: 12.85 GBP
 
   newspaper:
     name: Newspaper

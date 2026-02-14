@@ -135,7 +135,7 @@ impl TryFrom<&PositionalDiscountPromotionRef> for PositionalDiscountPromotion {
     fn try_from(value: &PositionalDiscountPromotionRef) -> Result<Self, Self::Error> {
         let Some(obj) = value.0.object() else {
             return Err(PhpException::default(
-                "PositionalDiscount promotion object is invalid".to_string(),
+                "positional discount promotion object is invalid".to_string(),
             ));
         };
 
@@ -143,23 +143,23 @@ impl TryFrom<&PositionalDiscountPromotionRef> for PositionalDiscountPromotion {
             .get_property::<ReferenceValue>("reference")
             .map_err(|_| {
                 PhpException::default(
-                    "PositionalDiscount reference property is invalid".to_string(),
+                    "positional discount reference property is invalid".to_string(),
                 )
             })?;
 
         let size = obj.get_property::<u16>("size").map_err(|_| {
-            PhpException::default("PositionalDiscount size property is invalid".to_string())
+            PhpException::default("positional discount size property is invalid".to_string())
         })?;
 
         let positions = obj.get_property::<Vec<u16>>("positions").map_err(|_| {
-            PhpException::default("PositionalDiscount positions property is invalid".to_string())
+            PhpException::default("positional discount positions property is invalid".to_string())
         })?;
 
         let qualification = obj
             .get_property::<QualificationRef>("qualification")
             .map_err(|_| {
                 PhpException::default(
-                    "PositionalDiscount qualification property is invalid.".to_string(),
+                    "positional discount qualification property is invalid.".to_string(),
                 )
             })?;
 
@@ -167,12 +167,12 @@ impl TryFrom<&PositionalDiscountPromotionRef> for PositionalDiscountPromotion {
             .get_property::<SimpleDiscountRef>("discount")
             .map_err(|_| {
                 PhpException::default(
-                    "PositionalDiscount discount property is invalid.".to_string(),
+                    "positional discount discount property is invalid.".to_string(),
                 )
             })?;
 
         let budget = obj.get_property::<BudgetRef>("budget").map_err(|_| {
-            PhpException::default("PositionalDiscount budget property is invalid.".to_string())
+            PhpException::default("positional discount budget property is invalid.".to_string())
         })?;
 
         Ok(PositionalDiscountPromotion {

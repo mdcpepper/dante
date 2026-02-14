@@ -9,8 +9,9 @@ use ext_php_rs::{
     types::Zval,
     zend::ce,
 };
-use lattice::discounts::SimpleDiscount as CoreSimpleDiscount;
 use rusty_money::{Money as RustyMoney, iso::Currency};
+
+use lattice::discounts::SimpleDiscount as CoreSimpleDiscount;
 
 use crate::{discounts::percentages::PercentageRef, money::MoneyRef};
 
@@ -222,7 +223,7 @@ impl TryFrom<SimpleDiscount> for CoreSimpleDiscount<'static> {
     }
 }
 
-fn require_money(
+pub(crate) fn require_money(
     amount: Option<MoneyRef>,
     kind: &str,
 ) -> Result<RustyMoney<'static, Currency>, PhpException> {
