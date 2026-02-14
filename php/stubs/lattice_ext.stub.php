@@ -360,6 +360,8 @@ namespace Lattice\Promotions;
 use Lattice\Discount\SimpleDiscount;
 use Lattice\Money;
 use Lattice\Qualification;
+use Lattice\Promotions\MixAndMatch\Discount as MixAndMatchDiscountConfig;
+use Lattice\Promotions\MixAndMatch\Slot as MixAndMatchSlot;
 
 if (!class_exists(Budget::class)) {
     class Budget
@@ -433,6 +435,100 @@ if (!class_exists(PositionalDiscount::class)) {
             Qualification $qualification,
             SimpleDiscount $discount,
             Budget $budget,
+        ) {}
+    }
+}
+
+if (!class_exists(MixAndMatchDiscount::class)) {
+    class MixAndMatchDiscount implements Promotion
+    {
+        public mixed $reference;
+
+        /** @var MixAndMatchSlot[] */
+        public array $slots;
+
+        public MixAndMatchDiscountConfig $discount;
+
+        public Budget $budget;
+
+        /**
+         * @param MixAndMatchSlot[] $slots
+         */
+        public function __construct(
+            mixed $reference,
+            array $slots,
+            MixAndMatchDiscount $discount,
+            Budget $budget,
+        ) {}
+    }
+}
+
+namespace Lattice\Promotions\MixAndMatch;
+
+use Lattice\Discount\Percentage;
+use Lattice\Money;
+use Lattice\Qualification;
+
+if (!enum_exists(DiscountKind::class)) {
+    enum DiscountKind: string
+    {
+        case PercentageOffAllItems = "percentage_off_all_items";
+        case AmountOffEachItem = "amount_off_each_item";
+        case OverrideEachItem = "override_each_item";
+        case AmountOffTotal = "amount_off_total";
+        case OverrideTotal = "override_total";
+        case PercentageOffCheapest = "percentage_off_cheapest";
+        case OverrideCheapest = "override_cheapest";
+    }
+}
+
+if (!class_exists(Discount::class)) {
+    class Discount
+    {
+        public DiscountKind $kind;
+
+        public ?Percentage $percentage;
+
+        public ?Money $amount;
+
+        public function __construct() {}
+
+        public static function percentageOffAllItems(
+            Percentage $percentage,
+        ): self {}
+
+        public static function amountOffEachItem(Money $amount): self {}
+
+        public static function overrideEachItem(Money $amount): self {}
+
+        public static function amountOffTotal(Money $amount): self {}
+
+        public static function overrideTotal(Money $amount): self {}
+
+        public static function percentageOffCheapest(
+            Percentage $percentage,
+        ): self {}
+
+        public static function overrideCheapest(Money $amount): self {}
+    }
+}
+
+if (!class_exists(Slot::class)) {
+    class Slot
+    {
+        public mixed $reference;
+
+        public Qualification $qualification;
+
+        public int $min;
+
+        public ?int $max;
+
+        public function __construct(
+            mixed $reference,
+            Qualification $qualification,
+            int $min,
+            ?int $max = null,
         ) {}
     }
 }

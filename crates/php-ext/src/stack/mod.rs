@@ -30,6 +30,9 @@ use crate::{
         interface::{PhpInterfacePromotion, PromotionRef},
         types::{
             direct_discount::{DirectDiscountPromotion, DirectDiscountPromotionRef},
+            mix_and_match_discount::{
+                MixAndMatchDiscountPromotion, MixAndMatchDiscountPromotionRef,
+            },
             positional_discount::{PositionalDiscountPromotion, PositionalDiscountPromotionRef},
         },
     },
@@ -200,6 +203,16 @@ impl Stack {
                 {
                     let promo: PositionalDiscountPromotion =
                         (&positional_discount_ref).try_into()?;
+
+                    core_promotions.push(promotion(promo.try_to_core_with_key(promotion_key)?));
+
+                    continue;
+                }
+
+                if let Some(mix_and_match_ref) =
+                    MixAndMatchDiscountPromotionRef::from_zval(promo.as_zval())
+                {
+                    let promo: MixAndMatchDiscountPromotion = (&mix_and_match_ref).try_into()?;
 
                     core_promotions.push(promotion(promo.try_to_core_with_key(promotion_key)?));
 

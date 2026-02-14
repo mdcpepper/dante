@@ -15,6 +15,10 @@ use crate::{
         interface::PhpInterfacePromotion,
         types::{
             direct_discount::DirectDiscountPromotion,
+            mix_and_match_discount::{
+                DiscountKind as MixAndMatchDiscountKind, MixAndMatchDiscount,
+                MixAndMatchDiscountPromotion, MixAndMatchSlot,
+            },
             positional_discount::PositionalDiscountPromotion,
         },
     },
@@ -56,6 +60,10 @@ pub fn get_module(module: ModuleBuilder) -> ModuleBuilder {
         .interface::<PhpInterfacePromotion>()
         .class::<DirectDiscountPromotion>()
         .class::<PositionalDiscountPromotion>()
+        .enumeration::<MixAndMatchDiscountKind>()
+        .class::<MixAndMatchDiscount>()
+        .class::<MixAndMatchSlot>()
+        .class::<MixAndMatchDiscountPromotion>()
         .class::<LayerOutput>()
         .class::<InvalidStackException>()
         .class::<Layer>()

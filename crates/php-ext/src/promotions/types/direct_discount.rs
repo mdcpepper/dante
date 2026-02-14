@@ -124,32 +124,32 @@ impl TryFrom<&DirectDiscountPromotionRef> for DirectDiscountPromotion {
     fn try_from(value: &DirectDiscountPromotionRef) -> Result<Self, Self::Error> {
         let Some(obj) = value.0.object() else {
             return Err(PhpException::default(
-                "DirectDiscount promotion object is invalid.".to_string(),
+                "direct discount promotion object is invalid.".to_string(),
             ));
         };
 
         let reference = obj
             .get_property::<ReferenceValue>("reference")
             .map_err(|_| {
-                PhpException::default("DirectDiscount reference property is invalid.".to_string())
+                PhpException::default("direct discount reference property is invalid.".to_string())
             })?;
 
         let qualification = obj
             .get_property::<QualificationRef>("qualification")
             .map_err(|_| {
                 PhpException::default(
-                    "DirectDiscount qualification property is invalid.".to_string(),
+                    "direct discount qualification property is invalid.".to_string(),
                 )
             })?;
 
         let discount = obj
             .get_property::<SimpleDiscountRef>("discount")
             .map_err(|_| {
-                PhpException::default("DirectDiscount discount property is invalid.".to_string())
+                PhpException::default("direct discount discount property is invalid.".to_string())
             })?;
 
         let budget = obj.get_property::<BudgetRef>("budget").map_err(|_| {
-            PhpException::default("DirectDiscount budget property is invalid.".to_string())
+            PhpException::default("direct discount budget property is invalid.".to_string())
         })?;
 
         Ok(DirectDiscountPromotion {
