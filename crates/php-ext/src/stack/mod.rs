@@ -34,6 +34,7 @@ use crate::{
                 MixAndMatchDiscountPromotion, MixAndMatchDiscountPromotionRef,
             },
             positional_discount::{PositionalDiscountPromotion, PositionalDiscountPromotionRef},
+            tiered_threshold::{TieredThresholdPromotion, TieredThresholdPromotionRef},
         },
     },
     receipt::{
@@ -213,6 +214,16 @@ impl Stack {
                     MixAndMatchDiscountPromotionRef::from_zval(promo.as_zval())
                 {
                     let promo: MixAndMatchDiscountPromotion = (&mix_and_match_ref).try_into()?;
+
+                    core_promotions.push(promotion(promo.try_to_core_with_key(promotion_key)?));
+
+                    continue;
+                }
+
+                if let Some(tiered_threshold_ref) =
+                    TieredThresholdPromotionRef::from_zval(promo.as_zval())
+                {
+                    let promo: TieredThresholdPromotion = (&tiered_threshold_ref).try_into()?;
 
                     core_promotions.push(promotion(promo.try_to_core_with_key(promotion_key)?));
 

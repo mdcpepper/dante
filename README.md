@@ -909,7 +909,7 @@ or:
 just test-extension
 ```
 
-Minimal usage:
+### Usage:
 
 ```php
 use Lattice\Discount\Percentage;
@@ -920,51 +920,105 @@ use Lattice\LayerOutput;
 use Lattice\Money;
 use Lattice\Product;
 use Lattice\Promotions\Budget;
-use Lattice\Promotions\DirectDiscount;
-use Lattice\Promotions\PositionalDiscount;
+use Lattice\Promotions\DirectDiscountPromotion;
+use Lattice\Promotions\MixAndMatch\Discount as MixAndMatchDiscount;
+use Lattice\Promotions\MixAndMatch\Slot as MixAndMatchSlot;
+use Lattice\Promotions\MixAndMatchPromotion;
+use Lattice\Promotions\PositionalDiscountPromotion;
+use Lattice\Promotions\TieredThreshold;
+use Lattice\Promotions\TieredThreshold\Discount as TieredThresholdDiscount;
+use Lattice\Promotions\TieredThreshold\Threshold as TieredThresholdThreshold;
+use Lattice\Promotions\TieredThreshold\Tier as TieredThresholdTier;
 use Lattice\Qualification;
 use Lattice\StackBuilder;
 
-$item = Item::fromProduct(
+$sandwich = Item::fromProduct(
     reference: "item-1",
-    product: new Product("sku-1", "Sandwich", new Money(300, "GBP"), ["eligible"]),
+    product: new Product("sku-1", "Sandwich", new Money(3_00, "GBP"), ["meal-deal:main"]),
 );
 
-$tenPercentOff = new DirectDiscount(
-    reference: "promo-1",
-    qualification: Qualification::matchAny(["eligible"]),
-    discount: SimpleDiscount::percentageOff(Percentage::fromDecimal(0.10)),
+$crisps = Item::fromProduct(
+    reference: "item-2",
+    product: new Product("sku-2", "Crisps", new Money(1_00, "GBP"), ["meal-deal:snack"]),
+);
+
+$tenPercentOffDrinks = new DirectDiscountPromotion(
+    reference: "10%-off",
+    qualification: Qualification::matchAny(["drinks"]),
+    discount: SimpleDiscount::percentageOff(Percentage::fromDecimal(0.1)),
     budget: Budget::unlimited(),
 );
 
-$threeForTwo = new PositionalDiscount(
-    reference: "promo-2",
-    qualification: Qualification::matchAny(["eligible"]),
+$threeForTwoHaircare = new PositionalDiscountPromotion(
+    reference: "3-for-2-haircare",
+    qualification: Qualification::matchAny(["haircare"]),
     size: 3,
     positions: [2],
     discount: SimpleDiscount::percentageOff(Percentage::fromDecimal(1.0)),
     budget: Budget::unlimited(),
-)
+);
+
+$mealDeal = new MixAndMatchPromotion(
+    reference: "meal-deal",
+    slots: [
+        new MixAndMatchSlot(
+            reference: "main",
+            qualification: Qualification::matchAny(["meal-deal:main"]),
+            min: 1,
+            max: 1,
+        ),
+        new MixAndMatchSlot(
+            reference: "snack",
+            qualification: Qualification::matchAny(["meal-deal:snack"]),
+            min: 1,
+            max: 1,
+        ),
+        new MixAndMatchSlot(
+            reference: "drink",
+            qualification: Qualification::matchAny(["meal-deal:drink"]),
+            min: 1,
+            max: 1,
+        ),
+    ],
+    discount: MixAndMatchDiscount::percentageOffAllItems(Percentage::fromDecimal(0.5)),
+    budget: Budget::unlimited(),
+);
+
+$tieredSpendBonus = new TieredThreshold(
+    reference: "tiered-spend-bonus",
+    tiers: [
+        new TieredThresholdTier(
+            TieredThresholdThreshold::withMonetaryThreshold(new Money(50_00, "GBP")),
+            TieredThresholdThreshold::withMonetaryThreshold(new Money(100_00, "GBP")),
+            Qualification::matchAll(),
+            Qualification::matchAll(),
+            TieredThresholdDiscount::percentageOffEachItem(Percentage::fromDecimal(0.05)),
+        ),
+        new TieredThresholdTier(
+            TieredThresholdThreshold::withMonetaryThreshold(new Money(100_00, "GBP")),
+            TieredThresholdThreshold::withMonetaryThreshold(new Money(200_00, "GBP")),
+            Qualification::matchAll(),
+            Qualification::matchAll(),
+            TieredThresholdDiscount::percentageOffEachItem(Percentage::fromDecimal(0.10)),
+        ),
+    ],
+    budget: Budget::unlimited(),
+);
 
 $builder = new StackBuilder();
 
 $layer = $builder->addLayer(
     new Layer(
-        "layer-1", 
+        "layer", 
         LayerOutput::passThrough(), 
-        [$tenPercentOff, $threeForTwo],
+        [$tenPercentOffDrinks, $threeForTwoHaircare, $mealDeal, $tieredSpendBonus],
     ),
 );
 
 $builder->setRoot($layer);
 
-$receipt = $builder->build()->process([$item]);
+$receipt = $builder->build()->process([$sandwich, $crisps]);
 ```
-
-Current limitations:
-
-- Only linear stacks are supported (no split outputs).
-- Only `DirectDiscount`, `MixAndMatchDiscountPromotion`, `PositionalDiscount` promotions are supported.
 
 ## WASM Demo
 

@@ -7,7 +7,7 @@ nodes:
     next: base-promotions
 
   base-promotions:
-    promotions: [meal-deal, bogof-drinks, 3-for-2]
+    promotions: [meal-deal, bogof-drinks, 3-for-2, sports-nutrition-tiered]
     output: split
     non-participating: staff-discount
 
@@ -75,3 +75,26 @@ promotions:
     discount:
       type: fixed_total
       amount: 3.80 GBP
+
+  sports-nutrition-tiered:
+    type: tiered_threshold
+    name: "Sports Nutrition Tiered Saver"
+    tiers:
+      - lower_threshold:
+          monetary: 10.00 GBP
+        upper_threshold:
+          monetary: 50.00 GBP
+        contribution_tags: [sports-nutrition]
+        discount_tags: [sports-nutrition]
+        discount:
+          type: percent_each_item
+          amount: 10%
+      - lower_threshold:
+          monetary: 50.00 GBP
+        upper_threshold:
+          monetary: 100.00 GBP
+        contribution_tags: [sports-nutrition]
+        discount_tags: [sports-nutrition]
+        discount:
+          type: percent_each_item
+          amount: 20%

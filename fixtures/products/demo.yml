@@ -53,3 +53,18 @@ products:
     name: Newspaper
     tags: [newspaper, staff-discount-exempt]
     price: 2.00 GBP
+
+  whey-protein:
+    name: Whey Protein 500g
+    tags: [sports-nutrition, staff-discount-exempt]
+    price: 6.80 GBP
+
+  creatine:
+    name: Creatine Monohydrate 300g
+    tags: [sports-nutrition, staff-discount-exempt]
+    price: 7.40 GBP
+
+  electrolyte-powder:
+    name: Electrolyte Powder 20 Servings
+    tags: [sports-nutrition, staff-discount-exempt]
+    price: 5.95 GBP

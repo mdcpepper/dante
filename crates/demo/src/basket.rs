@@ -855,10 +855,15 @@ fn BasketPanelMeta(
                     <dt>"3-for-2 Vitamins"</dt>
                     <dd>"Makes every third vitamin free (items tagged "<kbd>"vitamins"</kbd>")."</dd>
 
+                    <dt>"Sports Nutrition Tiered Saver"</dt>
+                    <dd>
+                        "Applies to items tagged "<kbd>"sports-nutrition"</kbd>": spend £10 to under £50 for 10% off each item, or £50 to under £100 for 20% off each item."
+                    </dd>
+
                     <dt>"5% Staff discount"</dt>
                     <dd>
                         "Applies only to items that are not part of any base promotions above, and does not apply to items tagged "
-                        <kbd>"staff-discount-exempt"</kbd>" (for example, Newspaper and vitamins)."
+                        <kbd>"staff-discount-exempt"</kbd>" (for example, newspaper, supplements, and vitamins)."
                     </dd>
                 </dl>
             </div>

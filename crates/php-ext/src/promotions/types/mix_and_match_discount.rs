@@ -431,7 +431,7 @@ impl TryFrom<MixAndMatchSlotRef> for MixAndMatchSlot {
 
 #[derive(Debug, Clone)]
 #[php_class]
-#[php(name = "Lattice\\Promotions\\MixAndMatchDiscount")]
+#[php(name = "Lattice\\Promotions\\MixAndMatchPromotion")]
 #[php(implements(PhpInterfacePromotion))]
 pub struct MixAndMatchDiscountPromotion {
     #[php(prop)]
