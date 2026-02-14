@@ -8,16 +8,14 @@ use ext_php_rs::{
     types::Zval,
 };
 
-use crate::{
-    items::ItemRef, money::MoneyRef, promotions::direct_discount::DirectDiscountPromotionRef,
-};
+use crate::{items::ItemRef, money::MoneyRef, promotions::interface::PromotionRef};
 
 #[derive(Debug, Clone)]
 #[php_class]
 #[php(name = "Lattice\\PromotionApplication")]
 pub struct PromotionApplication {
     #[php(prop)]
-    promotion: DirectDiscountPromotionRef,
+    promotion: PromotionRef,
 
     #[php(prop)]
     item: ItemRef,
@@ -35,7 +33,7 @@ pub struct PromotionApplication {
 #[php_impl]
 impl PromotionApplication {
     pub fn __construct(
-        promotion: DirectDiscountPromotionRef,
+        promotion: PromotionRef,
         item: ItemRef,
         bundle_id: usize,
         original_price: MoneyRef,
@@ -111,11 +109,9 @@ impl TryFrom<&PromotionApplicationRef> for PromotionApplication {
             PhpException::default("PromotionApplication item is invalid.".to_string())
         })?;
 
-        let promotion = obj
-            .get_property::<DirectDiscountPromotionRef>("promotion")
-            .map_err(|_| {
-                PhpException::default("PromotionApplication promotion is invalid.".to_string())
-            })?;
+        let promotion = obj.get_property::<PromotionRef>("promotion").map_err(|_| {
+            PhpException::default("PromotionApplication promotion is invalid.".to_string())
+        })?;
 
         let bundle_id = obj.get_property::<usize>("bundle_id").map_err(|_| {
             PhpException::default("PromotionApplication bundle_id is invalid.".to_string())

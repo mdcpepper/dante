@@ -10,6 +10,8 @@ if (!class_exists(Money::class)) {
         public string $currency;
 
         public function __construct(int $amount, string $currency) {}
+
+        public function currency(): string {}
     }
 }
 
@@ -64,14 +66,18 @@ if (!class_exists(Item::class)) {
     }
 }
 
-if (!enum_exists(LayerOutput::class)) {
-    enum LayerOutput: string
+if (!class_exists(LayerOutput::class)) {
+    class LayerOutput
     {
-        case PassThrough = "pass_through";
-        case Split = "split";
+        private ?Layer $participating;
+        private ?Layer $nonParticipating;
 
+        public function __construct() {}
         public static function passThrough(): self {}
-        public static function split(): self {}
+        public static function split(
+            Layer $participating,
+            Layer $nonParticipating,
+        ): self {}
     }
 }
 
@@ -81,16 +87,16 @@ if (!class_exists(Layer::class)) {
         public mixed $reference;
         public LayerOutput $output;
 
-        /** @var Lattice\Promotions\Promotion[] */
+        /** @var Promotions\Promotion[] */
         public array $promotions;
 
         /**
-         * @param Lattice\Promotions\Promotion[]|null $promotions
+         * @param Promotions\Promotion[]|null $promotions
          */
         public function __construct(
             mixed $reference,
             LayerOutput $output,
-            array $promotions,
+            ?array $promotions = [],
         ) {}
     }
 }
@@ -102,9 +108,9 @@ if (!class_exists(Stack::class)) {
         public array $layers;
 
         /**
-         * @param Layer[] $layers
+         * @param Layer[]|null $layers
          */
-        public function __construct(array $layers = []) {}
+        public function __construct(?array $layers = []) {}
 
         public function validateGraph(): bool {}
 
@@ -136,18 +142,18 @@ if (!class_exists(StackBuilder::class)) {
 if (!class_exists(PromotionApplication::class)) {
     class PromotionApplication
     {
-        public Lattice\Promotions\Promotion $promotion;
+        public Promotions\Promotion $promotion;
         public Item $item;
         public int $bundleId;
         public Money $originalPrice;
         public Money $finalPrice;
 
         public function __construct(
-            Lattice\Promotions\Promotion $promotion,
+            Promotions\Promotion $promotion,
             Item $item,
-            int $bundleId,
-            Money $originalPrice,
-            Money $finalPrice,
+            int $bundle_id,
+            Money $original_price,
+            Money $final_price,
         ) {}
     }
 }
@@ -165,14 +171,14 @@ if (!class_exists(Receipt::class)) {
         public array $promotionApplications;
 
         /**
-         * @param Item[]|null $fullPriceItems
-         * @param PromotionApplication[]|null $promotionApplications
+         * @param Item[] $full_price_items
+         * @param PromotionApplication[] $promotion_applications
          */
         public function __construct(
             Money $subtotal,
             Money $total,
-            ?array $fullPriceItems = [],
-            ?array $promotionApplications = [],
+            array $full_price_items,
+            array $promotion_applications,
         ) {}
     }
 }
@@ -198,7 +204,7 @@ if (!class_exists(Qualification::class)) {
          */
         public function __construct(
             Qualification\BoolOp $op,
-            ?array $rules = [],
+            ?array $rules = null,
         ) {}
 
         public static function matchAll(): self {}
@@ -243,7 +249,9 @@ if (!class_exists(Rule::class)) {
         /** @var string[] */
         public array $tags;
 
-        public ?Lattice\Qualification $group;
+        public ?\Lattice\Qualification $group;
+
+        public function __construct() {}
 
         /**
          * @param string[]|null $tags
@@ -261,7 +269,7 @@ if (!class_exists(Rule::class)) {
         public static function hasNone(?array $tags = []): self {}
 
         public static function group(
-            Lattice\Qualification $qualification,
+            \Lattice\Qualification $qualification,
         ): self {}
 
         /**
@@ -272,6 +280,9 @@ if (!class_exists(Rule::class)) {
 }
 
 namespace Lattice\Discount;
+
+use FeedCode\Lattice\Promotions\Promotion;
+use Lattice\Money;
 
 if (!class_exists(InvalidPercentageException::class)) {
     class InvalidPercentageException extends \Exception {}
@@ -294,6 +305,10 @@ if (!class_exists(Percentage::class)) {
 
         public static function fromDecimal(float $value): self {}
 
+        public static function fromNormalized(float $value): self {}
+
+        public static function validateNormalized(float $value): void {}
+
         public function value(): float {}
     }
 }
@@ -314,6 +329,8 @@ if (!class_exists(SimpleDiscount::class)) {
         public ?Percentage $percentage;
         public ?Money $amount;
 
+        public function __construct() {}
+
         public static function percentageOff(Percentage $percentage): self {}
 
         public static function amountOverride(Money $amount): self {}
@@ -325,6 +342,7 @@ if (!class_exists(SimpleDiscount::class)) {
 namespace Lattice\Promotions;
 
 use Lattice\Discount\SimpleDiscount;
+use Lattice\Money;
 use Lattice\Qualification;
 
 if (!class_exists(Budget::class)) {
@@ -333,6 +351,8 @@ if (!class_exists(Budget::class)) {
         public ?int $applicationLimit;
         public ?Money $monetaryLimit;
 
+        public function __construct() {}
+
         public static function unlimited(): self {}
 
         public static function withApplicationLimit(int $limit): self {}
@@ -340,8 +360,8 @@ if (!class_exists(Budget::class)) {
         public static function withMonetaryLimit(Money $limit): self {}
 
         public static function withBothLimits(
-            int $monetaryLimit,
-            Money $limit,
+            int $application,
+            Money $monetary,
         ): self {}
     }
 }
