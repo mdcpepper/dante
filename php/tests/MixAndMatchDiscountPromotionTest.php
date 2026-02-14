@@ -11,13 +11,13 @@ use Lattice\Product;
 use Lattice\Promotions\Budget;
 use Lattice\Promotions\MixAndMatch\Discount;
 use Lattice\Promotions\MixAndMatch\Slot as MixAndMatchSlot;
-use Lattice\Promotions\MixAndMatchDiscount;
+use Lattice\Promotions\MixAndMatchPromotion;
 use Lattice\Promotions\Promotion;
 use Lattice\Qualification;
 use Lattice\StackBuilder;
 
 it("implements Promotion interface", function () {
-    $promotion = new MixAndMatchDiscount(
+    $promotion = new MixAndMatchPromotion(
         reference: 123,
         slots: [
             new MixAndMatchSlot(
@@ -44,7 +44,7 @@ it("can be instantiated", function () {
         max: 2,
     );
 
-    $promotion = new MixAndMatchDiscount(
+    $promotion = new MixAndMatchPromotion(
         reference: 123,
         slots: [$slot],
         discount: Discount::amountOffEachItem(new Money(1_00, "GBP")),
@@ -83,7 +83,7 @@ it("applies discount correctly", function () {
         ),
     );
 
-    $promotion = new MixAndMatchDiscount(
+    $promotion = new MixAndMatchPromotion(
         reference: "promotion",
         slots: [
             new MixAndMatchSlot(

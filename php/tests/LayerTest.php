@@ -7,7 +7,7 @@ use Lattice\Layer;
 use Lattice\LayerOutput;
 use Lattice\Money;
 use Lattice\Promotions\Budget;
-use Lattice\Promotions\DirectDiscount;
+use Lattice\Promotions\DirectDiscountPromotion;
 use Lattice\Qualification;
 
 it("supports layer output factory methods", function (): void {
@@ -34,7 +34,7 @@ it("supports layer output factory methods", function (): void {
 });
 
 it("can build a layer with direct discount promotions", function (): void {
-    $promotion = new DirectDiscount(
+    $promotion = new DirectDiscountPromotion(
         reference: "direct-discount",
         qualification: Qualification::matchAny(["direct-discount"]),
         discount: SimpleDiscount::amountOff(new Money(50, "GBP")),
@@ -50,5 +50,5 @@ it("can build a layer with direct discount promotions", function (): void {
     expect($layer->reference)->toBe("direct-discount");
     expect($layer->output)->toBeInstanceOf(LayerOutput::class);
     expect($layer->promotions)->toHaveCount(1);
-    expect($layer->promotions[0])->toBeInstanceOf(DirectDiscount::class);
+    expect($layer->promotions[0])->toBeInstanceOf(DirectDiscountPromotion::class);
 });

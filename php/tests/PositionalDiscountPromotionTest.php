@@ -10,13 +10,13 @@ use Lattice\LayerOutput;
 use Lattice\Money;
 use Lattice\Product;
 use Lattice\Promotions\Budget;
-use Lattice\Promotions\PositionalDiscount;
+use Lattice\Promotions\PositionalDiscountPromotion;
 use Lattice\Promotions\Promotion;
 use Lattice\Qualification;
 use Lattice\StackBuilder;
 
 it("implements Promotion interface", function () {
-    $promotion = new PositionalDiscount(
+    $promotion = new PositionalDiscountPromotion(
         reference: 123,
         size: 3,
         positions: [2],
@@ -29,7 +29,7 @@ it("implements Promotion interface", function () {
 });
 
 it("can be instantiated", function () {
-    $promotion = new PositionalDiscount(
+    $promotion = new PositionalDiscountPromotion(
         reference: 123,
         size: 3,
         positions: [2],
@@ -78,7 +78,7 @@ it("applies discount correctly", function () {
         ),
     );
 
-    $promotion = new PositionalDiscount(
+    $promotion = new PositionalDiscountPromotion(
         reference: "promotion",
         qualification: Qualification::matchAll(),
         size: 3,

@@ -20,6 +20,10 @@ use crate::{
                 MixAndMatchDiscountPromotion, MixAndMatchSlot,
             },
             positional_discount::PositionalDiscountPromotion,
+            tiered_threshold::{
+                DiscountKind as TieredThresholdDiscountKind, ThresholdDiscount, ThresholdTier,
+                TierThreshold, TieredThresholdPromotion,
+            },
         },
     },
     qualification::{BoolOp, Qualification, Rule, RuleKind},
@@ -64,6 +68,11 @@ pub fn get_module(module: ModuleBuilder) -> ModuleBuilder {
         .class::<MixAndMatchDiscount>()
         .class::<MixAndMatchSlot>()
         .class::<MixAndMatchDiscountPromotion>()
+        .enumeration::<TieredThresholdDiscountKind>()
+        .class::<ThresholdDiscount>()
+        .class::<TierThreshold>()
+        .class::<ThresholdTier>()
+        .class::<TieredThresholdPromotion>()
         .class::<LayerOutput>()
         .class::<InvalidStackException>()
         .class::<Layer>()

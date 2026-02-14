@@ -10,13 +10,13 @@ use Lattice\Item;
 use Lattice\Money;
 use Lattice\Product;
 use Lattice\Promotions\Budget;
-use Lattice\Promotions\DirectDiscount;
+use Lattice\Promotions\DirectDiscountPromotion;
 use Lattice\Promotions\Promotion;
 use Lattice\Qualification;
 use Lattice\StackBuilder;
 
 it("implements Promotion interface", function () {
-    $promotion = new DirectDiscount(
+    $promotion = new DirectDiscountPromotion(
         reference: 123,
         qualification: Qualification::matchAll(),
         discount: SimpleDiscount::amountOff(new Money(123, "GBP")),
@@ -27,7 +27,7 @@ it("implements Promotion interface", function () {
 });
 
 it("can be instantiated", function () {
-    $promotion = new DirectDiscount(
+    $promotion = new DirectDiscountPromotion(
         reference: 123,
         qualification: Qualification::matchAll(),
         discount: SimpleDiscount::amountOff(new Money(123, "GBP")),
@@ -52,7 +52,7 @@ it("applies discount correctly", function () {
         ),
     );
 
-    $promotion = new DirectDiscount(
+    $promotion = new DirectDiscountPromotion(
         reference: "promotion",
         qualification: Qualification::matchAll(),
         discount: SimpleDiscount::percentageOff(Percentage::fromDecimal(0.1)),
