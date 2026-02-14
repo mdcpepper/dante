@@ -11,7 +11,12 @@ use crate::{
     money::Money,
     products::Product,
     promotions::{
-        budgets::Budget, direct_discount::DirectDiscountPromotion, interface::PhpInterfacePromotion,
+        budgets::Budget,
+        interface::PhpInterfacePromotion,
+        types::{
+            direct_discount::DirectDiscountPromotion,
+            positional_discount::PositionalDiscountPromotion,
+        },
     },
     qualification::{BoolOp, Qualification, Rule, RuleKind},
     receipt::{Receipt, applications::PromotionApplication},
@@ -50,6 +55,7 @@ pub fn get_module(module: ModuleBuilder) -> ModuleBuilder {
         .class::<Budget>()
         .interface::<PhpInterfacePromotion>()
         .class::<DirectDiscountPromotion>()
+        .class::<PositionalDiscountPromotion>()
         .class::<LayerOutput>()
         .class::<InvalidStackException>()
         .class::<Layer>()

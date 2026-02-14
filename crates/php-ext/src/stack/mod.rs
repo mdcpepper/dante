@@ -27,8 +27,11 @@ use crate::{
     items::{Item, ItemRef},
     money::{Money, MoneyRef},
     promotions::{
-        direct_discount::{DirectDiscountPromotion, DirectDiscountPromotionRef},
         interface::{PhpInterfacePromotion, PromotionRef},
+        types::{
+            direct_discount::{DirectDiscountPromotion, DirectDiscountPromotionRef},
+            positional_discount::{PositionalDiscountPromotion, PositionalDiscountPromotionRef},
+        },
     },
     receipt::{
         Receipt,
@@ -180,19 +183,33 @@ impl Stack {
                 let promotion_key = promotion_keys.insert(());
                 let promotion_ref = promo.clone();
 
-                let direct_discount_ref =
-                    DirectDiscountPromotionRef::from_zval(promo.as_zval()).ok_or_else(|| {
-                        PhpException::from_class::<InvalidStackException>(format!(
-                            "Layer {idx} contains an unsupported promotion. Promotions must implement {} and be a supported concrete promotion class.",
-                            <PhpInterfacePromotion as RegisteredClass>::CLASS_NAME,
-                        ))
-                    })?;
-
-                let promo: DirectDiscountPromotion = (&direct_discount_ref).try_into()?;
-
                 promotions.insert(promotion_key, promotion_ref);
 
-                core_promotions.push(promotion(promo.try_to_core_with_reference(promotion_key)?));
+                if let Some(direct_discount_ref) =
+                    DirectDiscountPromotionRef::from_zval(promo.as_zval())
+                {
+                    let promo: DirectDiscountPromotion = (&direct_discount_ref).try_into()?;
+
+                    core_promotions.push(promotion(promo.try_to_core_with_key(promotion_key)?));
+
+                    continue;
+                }
+
+                if let Some(positional_discount_ref) =
+                    PositionalDiscountPromotionRef::from_zval(promo.as_zval())
+                {
+                    let promo: PositionalDiscountPromotion =
+                        (&positional_discount_ref).try_into()?;
+
+                    core_promotions.push(promotion(promo.try_to_core_with_key(promotion_key)?));
+
+                    continue;
+                }
+
+                return Err(PhpException::from_class::<InvalidStackException>(format!(
+                    "Layer {idx} contains an unsupported promotion. Promotions must implement {} and be a supported concrete promotion class.",
+                    <PhpInterfacePromotion as RegisteredClass>::CLASS_NAME,
+                )));
             }
 
             let node = builder

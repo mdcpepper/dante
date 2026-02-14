@@ -7,6 +7,7 @@ if (!class_exists(Money::class)) {
     class Money
     {
         public int $amount;
+
         public string $currency;
 
         public function __construct(int $amount, string $currency) {}
@@ -19,7 +20,9 @@ if (!class_exists(Product::class)) {
     class Product
     {
         public mixed $reference;
+
         public string $name;
+
         public Money $price;
 
         /** @var string[] */
@@ -41,8 +44,11 @@ if (!class_exists(Item::class)) {
     class Item
     {
         public mixed $reference;
+
         public string $name;
+
         public Money $price;
+
         public Product $product;
 
         /** @var string[] */
@@ -70,10 +76,13 @@ if (!class_exists(LayerOutput::class)) {
     class LayerOutput
     {
         private ?Layer $participating;
+
         private ?Layer $nonParticipating;
 
         public function __construct() {}
+
         public static function passThrough(): self {}
+
         public static function split(
             Layer $participating,
             Layer $nonParticipating,
@@ -85,6 +94,7 @@ if (!class_exists(Layer::class)) {
     class Layer
     {
         public mixed $reference;
+
         public LayerOutput $output;
 
         /** @var Promotions\Promotion[] */
@@ -143,9 +153,13 @@ if (!class_exists(PromotionApplication::class)) {
     class PromotionApplication
     {
         public Promotions\Promotion $promotion;
+
         public Item $item;
+
         public int $bundleId;
+
         public Money $originalPrice;
+
         public Money $finalPrice;
 
         public function __construct(
@@ -162,6 +176,7 @@ if (!class_exists(Receipt::class)) {
     class Receipt
     {
         public Money $subtotal;
+
         public Money $total;
 
         /** @var Item[] */
@@ -281,7 +296,6 @@ if (!class_exists(Rule::class)) {
 
 namespace Lattice\Discount;
 
-use FeedCode\Lattice\Promotions\Promotion;
 use Lattice\Money;
 
 if (!class_exists(InvalidPercentageException::class)) {
@@ -326,7 +340,9 @@ if (!class_exists(SimpleDiscount::class)) {
     class SimpleDiscount
     {
         public DiscountKind $kind;
+
         public ?Percentage $percentage;
+
         public ?Money $amount;
 
         public function __construct() {}
@@ -349,6 +365,7 @@ if (!class_exists(Budget::class)) {
     class Budget
     {
         public ?int $applicationLimit;
+
         public ?Money $monetaryLimit;
 
         public function __construct() {}
@@ -374,12 +391,45 @@ if (!class_exists(DirectDiscount::class)) {
     class DirectDiscount implements Promotion
     {
         public mixed $reference;
+
         public Qualification $qualification;
+
         public SimpleDiscount $discount;
+
         public Budget $budget;
 
         public function __construct(
             mixed $reference,
+            Qualification $qualification,
+            SimpleDiscount $discount,
+            Budget $budget,
+        ) {}
+    }
+}
+
+if (!class_exists(PositionalDiscount::class)) {
+    class PositionalDiscount implements Promotion
+    {
+        public mixed $reference;
+
+        public Qualification $qualification;
+
+        public int $size;
+
+        /** @var int[] */
+        public array $positions;
+
+        public SimpleDiscount $discount;
+
+        public Budget $budget;
+
+        /**
+         * @param int[] $positions
+         */
+        public function __construct(
+            mixed $reference,
+            int $size,
+            array $positions,
             Qualification $qualification,
             SimpleDiscount $discount,
             Budget $budget,

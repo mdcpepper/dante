@@ -56,6 +56,20 @@ impl DirectDiscountPromotion {
     }
 }
 
+impl DirectDiscountPromotion {
+    pub(crate) fn try_to_core_with_key(
+        &self,
+        key: PromotionKey,
+    ) -> Result<CoreDirectDiscountPromotion<'static, StringTagCollection>, PhpException> {
+        Ok(CoreDirectDiscountPromotion::new(
+            key,
+            (&self.qualification).try_into()?,
+            (&self.discount).try_into()?,
+            (&self.budget).try_into()?,
+        ))
+    }
+}
+
 #[derive(Debug)]
 pub struct DirectDiscountPromotionRef(Zval);
 
@@ -152,19 +166,5 @@ impl TryFrom<DirectDiscountPromotionRef> for DirectDiscountPromotion {
 
     fn try_from(value: DirectDiscountPromotionRef) -> Result<Self, Self::Error> {
         (&value).try_into()
-    }
-}
-
-impl DirectDiscountPromotion {
-    pub(crate) fn try_to_core_with_reference(
-        &self,
-        reference: PromotionKey,
-    ) -> Result<CoreDirectDiscountPromotion<'static, StringTagCollection>, PhpException> {
-        Ok(CoreDirectDiscountPromotion::new(
-            reference,
-            (&self.qualification).try_into()?,
-            (&self.discount).try_into()?,
-            (&self.budget).try_into()?,
-        ))
     }
 }

@@ -49,7 +49,6 @@
     --space-layout-pill-pad-x: var(--space-2xs);
     --space-layout-button-pad-y: var(--space-3xs);
     --space-layout-button-pad-x: var(--space-2xs);
-    --space-layout-button-pad-x-wide: var(--space-2xs-xs);
 
     --size-radius-card: var(--space-2xs);
     --size-radius-control: var(--space-3xs-2xs);
