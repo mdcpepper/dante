@@ -26,7 +26,10 @@ use lattice::{
 use crate::{
     items::{Item, ItemRef},
     money::{Money, MoneyRef},
-    promotions::direct_discount::{DirectDiscountPromotion, DirectDiscountPromotionRef},
+    promotions::{
+        direct_discount::{DirectDiscountPromotion, DirectDiscountPromotionRef},
+        interface::{PhpInterfacePromotion, PromotionRef},
+    },
     receipt::{
         Receipt,
         applications::{PromotionApplication, PromotionApplicationRef},
@@ -143,7 +146,7 @@ impl Stack {
 
 struct BuiltGraph {
     graph: PromotionGraph<'static>,
-    promotions: HashMap<PromotionKey, DirectDiscountPromotionRef>,
+    promotions: HashMap<PromotionKey, PromotionRef>,
 }
 
 impl Stack {
@@ -159,55 +162,98 @@ impl Stack {
         }
 
         let mut builder = PromotionGraphBuilder::new();
+
         let mut promotion_keys = SlotMap::<PromotionKey, ()>::with_key();
-        let mut promotion_ref_map = HashMap::new();
+        let mut promotions = HashMap::new();
+
         let mut layer_nodes = Vec::with_capacity(self.layers.len());
+        let mut layer_outputs = Vec::with_capacity(self.layers.len());
 
         for (idx, layer_ref) in self.layers.iter().enumerate() {
             let layer: Layer = layer_ref.try_into()?;
-            let output_mode = layer.output();
-
-            if output_mode == LayerOutput::Split {
-                return Err(PhpException::from_class::<InvalidStackException>(
-                    "LayerOutput::Split is not supported in linear Stack yet.".to_string(),
-                ));
-            }
+            let output: LayerOutput = layer.output().try_into()?;
+            let output_mode = output.to_core_output_mode()?;
 
             let mut core_promotions = Vec::with_capacity(layer.promotions().len());
 
             for promo in layer.promotions() {
                 let promotion_key = promotion_keys.insert(());
                 let promotion_ref = promo.clone();
-                let promo: DirectDiscountPromotion = promo.try_into()?;
 
-                promotion_ref_map.insert(promotion_key, promotion_ref);
+                let direct_discount_ref =
+                    DirectDiscountPromotionRef::from_zval(promo.as_zval()).ok_or_else(|| {
+                        PhpException::from_class::<InvalidStackException>(format!(
+                            "Layer {idx} contains an unsupported promotion. Promotions must implement {} and be a supported concrete promotion class.",
+                            <PhpInterfacePromotion as RegisteredClass>::CLASS_NAME,
+                        ))
+                    })?;
+
+                let promo: DirectDiscountPromotion = (&direct_discount_ref).try_into()?;
+
+                promotions.insert(promotion_key, promotion_ref);
 
                 core_promotions.push(promotion(promo.try_to_core_with_reference(promotion_key)?));
             }
 
             let node = builder
-                .add_layer(format!("Layer {idx}"), core_promotions, output_mode.into())
+                .add_layer(format!("Layer {idx}"), core_promotions, output_mode)
                 .map_err(graph_error_to_php_exception)?;
 
             layer_nodes.push(node);
+            layer_outputs.push(output);
         }
 
         if let Some(root) = layer_nodes.first().copied() {
             builder.set_root(root);
         }
 
-        for edge in layer_nodes.windows(2) {
-            builder
-                .connect_pass_through(edge[0], edge[1])
-                .map_err(graph_error_to_php_exception)?;
+        if layer_outputs.iter().any(LayerOutput::is_split) {
+            for (idx, output) in layer_outputs.iter().enumerate() {
+                let Some((participating, non_participating)) = output.split_targets()? else {
+                    continue;
+                };
+
+                let participating_idx = self
+                    .layers
+                    .iter()
+                    .position(|candidate| candidate.is_identical(participating))
+                    .ok_or_else(|| {
+                        PhpException::from_class::<InvalidStackException>(format!(
+                            "Layer {idx} split output participating target must be one of the {} layer(s) in this Stack.",
+                            self.layers.len()
+                        ))
+                    })?;
+
+                let non_participating_idx = self
+                    .layers
+                    .iter()
+                    .position(|candidate| candidate.is_identical(non_participating))
+                    .ok_or_else(|| {
+                        PhpException::from_class::<InvalidStackException>(format!(
+                            "Layer {idx} split output non-participating target must be one of the {} layer(s) in this Stack.",
+                            self.layers.len()
+                        ))
+                    })?;
+
+                builder
+                    .connect_split(
+                        layer_nodes[idx],
+                        layer_nodes[participating_idx],
+                        layer_nodes[non_participating_idx],
+                    )
+                    .map_err(graph_error_to_php_exception)?;
+            }
+        } else {
+            for edge in layer_nodes.windows(2) {
+                builder
+                    .connect_pass_through(edge[0], edge[1])
+                    .map_err(graph_error_to_php_exception)?;
+            }
         }
 
         let graph = PromotionGraph::from_builder(builder).map_err(graph_error_to_php_exception)?;
 
-        Ok(BuiltGraph {
-            graph,
-            promotions: promotion_ref_map,
-        })
+        Ok(BuiltGraph { graph, promotions })
     }
 
     fn process_items(&self, items: Vec<ItemRef>) -> Result<Receipt, PhpException> {

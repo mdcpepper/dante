@@ -10,31 +10,45 @@ use Lattice\Promotions\Budget;
 use Lattice\Promotions\DirectDiscount;
 use Lattice\Qualification;
 
-it("supports layer output enum values", function (): void {
-    assertLatticeExtensionLoaded();
+it("supports layer output factory methods", function (): void {
+    $participating = new Layer(
+        reference: "participating",
+        output: LayerOutput::passThrough(),
+        promotions: [],
+    );
 
-    expect(LayerOutput::PassThrough->value)->toBe("pass_through");
-    expect(LayerOutput::Split->value)->toBe("split");
+    $nonParticipating = new Layer(
+        reference: "non-participating",
+        output: LayerOutput::passThrough(),
+        promotions: [],
+    );
+
+    $passThrough = LayerOutput::passThrough();
+    $split = LayerOutput::split(
+        participating: $participating,
+        nonParticipating: $nonParticipating,
+    );
+
+    expect($passThrough)->toBeInstanceOf(LayerOutput::class);
+    expect($split)->toBeInstanceOf(LayerOutput::class);
 });
 
 it("can build a layer with direct discount promotions", function (): void {
-    assertLatticeExtensionLoaded();
-
     $promotion = new DirectDiscount(
-        reference: "meal-deal",
-        qualification: Qualification::matchAny(["meal-deal:main"]),
+        reference: "direct-discount",
+        qualification: Qualification::matchAny(["direct-discount"]),
         discount: SimpleDiscount::amountOff(new Money(50, "GBP")),
         budget: Budget::unlimited(),
     );
 
     $layer = new Layer(
-        reference: "meal-deal",
-        output: LayerOutput::PassThrough,
+        reference: "direct-discount",
+        output: LayerOutput::passThrough(),
         promotions: [$promotion],
     );
 
-    expect($layer->reference)->toBe("meal-deal");
-    expect($layer->output)->toBe(LayerOutput::PassThrough);
+    expect($layer->reference)->toBe("direct-discount");
+    expect($layer->output)->toBeInstanceOf(LayerOutput::class);
     expect($layer->promotions)->toHaveCount(1);
     expect($layer->promotions[0])->toBeInstanceOf(DirectDiscount::class);
 });

@@ -50,7 +50,7 @@ pub fn get_module(module: ModuleBuilder) -> ModuleBuilder {
         .class::<Budget>()
         .interface::<PhpInterfacePromotion>()
         .class::<DirectDiscountPromotion>()
-        .enumeration::<LayerOutput>()
+        .class::<LayerOutput>()
         .class::<InvalidStackException>()
         .class::<Layer>()
         .class::<StackBuilder>()
