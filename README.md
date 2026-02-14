@@ -21,7 +21,7 @@ optimisation engine written in Rust.
 * [Stacking](#stacking)
 * [Export ILP Formulation](#export-ilp-formulation)
 * [PHP Extension](#php-extension)
-* [Demo](#demo)
+* [WASM Demo](#wasm-demo)
 
 ## Promotion Types
 
@@ -921,6 +921,7 @@ use Lattice\Money;
 use Lattice\Product;
 use Lattice\Promotions\Budget;
 use Lattice\Promotions\DirectDiscount;
+use Lattice\Promotions\PositionalDiscount;
 use Lattice\Qualification;
 use Lattice\StackBuilder;
 
@@ -929,36 +930,43 @@ $item = Item::fromProduct(
     product: new Product("sku-1", "Sandwich", new Money(300, "GBP"), ["eligible"]),
 );
 
-$promotion = new DirectDiscount(
+$tenPercentOff = new DirectDiscount(
     reference: "promo-1",
     qualification: Qualification::matchAny(["eligible"]),
     discount: SimpleDiscount::percentageOff(Percentage::fromDecimal(0.10)),
     budget: Budget::unlimited(),
 );
 
+$threeForTwo = new PositionalDiscount(
+    reference: "promo-2",
+    qualification: Qualification::matchAny(["eligible"]),
+    size: 3,
+    positions: [2],
+    discount: SimpleDiscount::percentageOff(Percentage::fromDecimal(1.0)),
+    budget: Budget::unlimited(),
+)
+
 $builder = new StackBuilder();
-$layer = $builder->addLayer(new Layer("layer-1", LayerOutput::passThrough(), [$promotion]));
+
+$layer = $builder->addLayer(
+    new Layer(
+        "layer-1", 
+        LayerOutput::passThrough(), 
+        [$tenPercentOff, $threeForTwo],
+    ),
+);
+
 $builder->setRoot($layer);
 
 $receipt = $builder->build()->process([$item]);
 ```
 
-How it works:
-
-1. PHP config objects (`Money`, `Product`, `Item`, `Qualification`,
-   `SimpleDiscount`, `Budget`, `DirectDiscount`) are converted into core Rust
-   lattice types.
-2. `Stack` builds a promotion graph from PHP layers and evaluates it against the
-   provided items.
-3. The result is mapped back into a PHP `Receipt` with `subtotal`, `total`,
-   `fullPriceItems`, and `promotionApplications`.
-
 Current limitations:
 
 - Only linear stacks are supported (no split outputs).
-- Only `DirectDiscount` promotions are supported.
+- Only `DirectDiscount` and `PositionalDiscount` promotions are supported.
 
-## Demo
+## WASM Demo
 
 The `crates/demo` app is a small client-side Leptos UI that loads the demo fixtures,
 lists products, and evaluates basket pricing through the promotion graph in real time,

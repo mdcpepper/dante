@@ -52,8 +52,7 @@
 }
 
 .icon-button-product {
-    padding: var(--space-layout-button-pad-y)
-        var(--space-layout-button-pad-x-wide);
+    padding: var(--space-layout-button-pad-y) var(--space-layout-button-pad-x);
     font-size: var(--step--1);
     line-height: 1.25rem;
 }
