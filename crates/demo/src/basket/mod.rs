@@ -621,27 +621,27 @@ fn BasketPanelMeta(
             <div class="panel-meta-block">
                 {solve_meta}
                 <dl class="panel-meta-notes">
-                    <dt>"10% Off Coca Cola"</dt>
-                    <dd>"A supplier-funded discount that applies first and can stack with other retailer promotions."</dd>
+                    <dt>"10% Off Cola"</dt>
+                    <dd>"A supplier-funded discount that applies first and can stack with the other retailer promotions."</dd>
 
                     <dt>"£3.80 Meal Deal"</dt>
-                    <dd>"Applies to 1 "<kbd>"main"</kbd>" + 1 "<kbd>"drink"</kbd>" + 1 "<kbd>"snack"</kbd>" as a fixed bundle price."</dd>
+                    <dd>"Applies to 1 main + 1 drink + 1 snack as a fixed bundle price."</dd>
 
                     <dt>"Buy One Get One Free Drinks"</dt>
                     <dd>"Makes every second drink free."</dd>
 
                     <dt>"3-for-2 Vitamins"</dt>
-                    <dd>"Makes every third vitamin free (items tagged "<kbd>"vitamins"</kbd>")."</dd>
+                    <dd>"Makes every third vitamin product free."</dd>
 
                     <dt>"Sports Nutrition Tiered Saver"</dt>
                     <dd>
-                        "Applies to items tagged "<kbd>"sports-nutrition"</kbd>": spend £10 to under £50 for 10% off each item, or £50 to under £100 for 20% off each item."
+                        "Applies to sports nutrition items: spend £10-£50 for 10% off each item, or £50-£100 for 20% off each item."
                     </dd>
 
                     <dt>"5% Staff discount"</dt>
                     <dd>
                         "Applies only to items that are not part of any base promotions above, and does not apply to items tagged "
-                        <kbd>"staff-discount-exempt"</kbd>" (for example, newspaper, supplements, and vitamins)."
+                        "as exempt (newspaper, supplements, and vitamins)."
                     </dd>
                 </dl>
             </div>

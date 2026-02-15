@@ -1,6 +1,6 @@
 products:
   cola:
-    name: Coca Cola 500ml
+    name: Cola 500ml
     tags: [drink, coke]
     price: 2.50 GBP
 
