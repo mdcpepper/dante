@@ -18,7 +18,7 @@ nodes:
 promotions:
   coke-10:
     type: direct_discount
-    name: "10% Off Coca Cola"
+    name: "10% Off Cola"
     tags: [coke]
     discount:
       type: percentage_off
