@@ -560,7 +560,7 @@ fn promotion_cells(
         app.savings().map_err(ReceiptError::Money)?,
     );
 
-    let bundle_id = format!("#{:<3}", app.bundle_id + 1);
+    let redemption_idx = format!("#{:<3}", app.redemption_idx + 1);
 
     let price_color = if is_final {
         Color::FG_GREEN
@@ -579,7 +579,7 @@ fn promotion_cells(
         base_price: format!("{}", app.original_price),
         final_price: final_price_display,
         savings: savings_display,
-        promotion: format!("{bundle_id} {promo_name}"),
+        promotion: format!("{redemption_idx} {promo_name}"),
         price_color,
     })
 }
@@ -819,14 +819,14 @@ mod tests {
             PromotionApplication {
                 promotion_key: PromotionKey::default(),
                 item_idx: 0,
-                bundle_id: 0,
+                redemption_idx: 0,
                 original_price: Money::from_minor(100, GBP),
                 final_price: Money::from_minor(75, GBP),
             },
             PromotionApplication {
                 promotion_key: PromotionKey::default(),
                 item_idx: 2,
-                bundle_id: 1,
+                redemption_idx: 1,
                 original_price: Money::from_minor(300, GBP),
                 final_price: Money::from_minor(225, GBP),
             },
@@ -889,7 +889,7 @@ mod tests {
         let promotion_apps = smallvec![PromotionApplication {
             promotion_key: PromotionKey::default(),
             item_idx: 0,
-            bundle_id: 42,
+            redemption_idx: 42,
             original_price: Money::from_minor(100, GBP),
             final_price: Money::from_minor(50, GBP),
         }];
@@ -910,7 +910,7 @@ mod tests {
         let app = apps.first().ok_or("Expected at least one application")?;
 
         assert_eq!(app.item_idx, 0);
-        assert_eq!(app.bundle_id, 42);
+        assert_eq!(app.redemption_idx, 42);
         assert_eq!(app.original_price, Money::from_minor(100, GBP));
         assert_eq!(app.final_price, Money::from_minor(50, GBP));
 
@@ -926,7 +926,7 @@ mod tests {
             smallvec![PromotionApplication {
                 promotion_key: PromotionKey::default(),
                 item_idx: 1,
-                bundle_id: 0,
+                redemption_idx: 0,
                 original_price: Money::from_minor(200, GBP),
                 final_price: Money::from_minor(150, GBP),
             }],
@@ -982,7 +982,7 @@ mod tests {
             smallvec![PromotionApplication {
                 promotion_key: promo_key,
                 item_idx: 0,
-                bundle_id: 0,
+                redemption_idx: 0,
                 original_price: apple_price,
                 final_price: Money::from_minor(80, GBP),
             }],
@@ -1068,7 +1068,7 @@ mod tests {
             smallvec![PromotionApplication {
                 promotion_key: PromotionKey::default(),
                 item_idx: 0,
-                bundle_id: 0,
+                redemption_idx: 0,
                 original_price: drink_price,
                 final_price: drink_price,
             }],
@@ -1121,7 +1121,7 @@ mod tests {
             smallvec![PromotionApplication {
                 promotion_key: promo_key,
                 item_idx: 0,
-                bundle_id: 0,
+                redemption_idx: 0,
                 original_price: apple_price,
                 final_price: Money::from_minor(50, GBP),
             }],
@@ -1161,7 +1161,7 @@ mod tests {
         let app = PromotionApplication {
             promotion_key: PromotionKey::default(),
             item_idx: 0,
-            bundle_id: 0,
+            redemption_idx: 0,
             original_price: Money::from_minor(100, GBP),
             final_price: Money::from_minor(50, GBP),
         };
@@ -1177,7 +1177,7 @@ mod tests {
     }
 
     #[test]
-    fn write_to_renders_item_savings_with_bundle_id() -> TestResult {
+    fn write_to_renders_item_savings_with_redemption_idx() -> TestResult {
         let mut product_meta = SlotMap::<ProductKey, Product<'_>>::with_key();
         let mut promotion_meta = SlotMap::<PromotionKey, PromotionMeta>::with_key();
 
@@ -1222,7 +1222,7 @@ mod tests {
             smallvec![PromotionApplication {
                 promotion_key: promo_key,
                 item_idx: 0,
-                bundle_id: 5,
+                redemption_idx: 5,
                 original_price: wrap_price,
                 final_price: Money::from_minor(300, GBP),
             }],
@@ -1233,7 +1233,7 @@ mod tests {
             smallvec![PromotionApplication {
                 promotion_key: promo_key,
                 item_idx: 1,
-                bundle_id: 5,
+                redemption_idx: 5,
                 original_price: drink_price,
                 final_price: Money::from_minor(100, GBP),
             }],
@@ -1254,7 +1254,7 @@ mod tests {
         assert!(output.contains("Chicken Wrap"));
         assert!(output.contains("Water"));
         assert!(output.contains("Meal Deal"));
-        assert!(output.contains("#6")); // bundle_id 5 displayed as 6 (5+1)
+        assert!(output.contains("#6")); // redemption_idx 5 displayed as 6 (5+1)
         assert!(output.contains("Subtotal:"));
         assert!(output.contains("Total:"));
         assert!(output.contains("Savings:"));
@@ -1316,14 +1316,14 @@ mod tests {
                 PromotionApplication {
                     promotion_key: PromotionKey::default(),
                     item_idx: 0,
-                    bundle_id: 0,
+                    redemption_idx: 0,
                     original_price: Money::from_minor(400, GBP),
                     final_price: Money::from_minor(300, GBP),
                 },
                 PromotionApplication {
                     promotion_key: PromotionKey::default(),
                     item_idx: 0,
-                    bundle_id: 1,
+                    redemption_idx: 1,
                     original_price: Money::from_minor(300, GBP),
                     final_price: Money::from_minor(270, GBP),
                 },
@@ -1388,14 +1388,14 @@ mod tests {
                 PromotionApplication {
                     promotion_key: food_sale_key,
                     item_idx: 0,
-                    bundle_id: 0,
+                    redemption_idx: 0,
                     original_price: Money::from_minor(400, GBP),
                     final_price: Money::from_minor(300, GBP),
                 },
                 PromotionApplication {
                     promotion_key: loyalty_key,
                     item_idx: 0,
-                    bundle_id: 2,
+                    redemption_idx: 2,
                     original_price: Money::from_minor(300, GBP),
                     final_price: Money::from_minor(270, GBP),
                 },
@@ -1436,14 +1436,14 @@ mod tests {
                 PromotionApplication {
                     promotion_key: PromotionKey::default(),
                     item_idx: 0,
-                    bundle_id: 0,
+                    redemption_idx: 0,
                     original_price: Money::from_minor(100, GBP),
                     final_price: Money::from_minor(80, GBP),
                 },
                 PromotionApplication {
                     promotion_key: PromotionKey::default(),
                     item_idx: 0,
-                    bundle_id: 1,
+                    redemption_idx: 1,
                     original_price: Money::from_minor(80, GBP),
                     final_price: Money::from_minor(72, GBP),
                 },

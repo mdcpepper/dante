@@ -30,7 +30,7 @@ use lattice::{
 
 use crate::{
     announce,
-    promotions::{PromotionPill, bundle_pill_style},
+    promotions::{PromotionPill, redemption_pill_style},
 };
 
 pub(super) mod dock;
@@ -120,7 +120,7 @@ pub(crate) struct PromotionSavings {
     item_applications: usize,
 
     /// Number of distinct bundles for this promotion.
-    bundle_applications: usize,
+    redemptions: usize,
 }
 
 fn build_basket(
@@ -223,8 +223,8 @@ fn solve_basket(
                         .get(app.promotion_key)
                         .map(|label| PromotionPill {
                             label: label.clone(),
-                            bundle_id: app.bundle_id + 1,
-                            style: bundle_pill_style(app.bundle_id),
+                            redemption_idx: app.redemption_idx + 1,
+                            style: redemption_pill_style(app.redemption_idx),
                         })
                 })
                 .collect()
@@ -266,7 +266,7 @@ struct PromotionAggregate {
     name: String,
     savings_minor: i64,
     item_applications: usize,
-    bundle_ids: FxHashSet<usize>,
+    redemption_idxs: FxHashSet<usize>,
 }
 
 fn collect_promotion_savings(
@@ -299,12 +299,12 @@ fn collect_promotion_savings(
                         name: promotion_name,
                         savings_minor: 0,
                         item_applications: 0,
-                        bundle_ids: FxHashSet::default(),
+                        redemption_idxs: FxHashSet::default(),
                     });
 
             aggregate.savings_minor += app_savings_minor;
             aggregate.item_applications += 1;
-            aggregate.bundle_ids.insert(app.bundle_id);
+            aggregate.redemption_idxs.insert(app.redemption_idx);
         }
     }
 
@@ -321,7 +321,7 @@ fn collect_promotion_savings(
         .into_iter()
         .map(|aggregate| PromotionSavings {
             item_applications: aggregate.item_applications,
-            bundle_applications: aggregate.bundle_ids.len(),
+            redemptions: aggregate.redemption_idxs.len(),
             savings: format!(
                 "-{}",
                 format_money(&Money::from_minor(
@@ -1129,7 +1129,7 @@ mod tests {
             .ok_or_else(|| "Expected meal deal entry in savings breakdown".to_string())?;
 
         assert_eq!(meal_deal.item_applications, 3);
-        assert_eq!(meal_deal.bundle_applications, 1);
+        assert_eq!(meal_deal.redemptions, 1);
 
         Ok(())
     }

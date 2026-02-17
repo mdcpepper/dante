@@ -36,7 +36,7 @@ pub struct PromotionsFixture {
 /// Budget constraint fixture
 #[derive(Debug, Deserialize)]
 pub struct BudgetFixture {
-    /// Maximum applications (items or bundles)
+    /// Maximum applications (redemptions)
     pub applications: Option<u32>,
 
     /// Maximum monetary discount value (e.g., "10.00 GBP")

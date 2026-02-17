@@ -341,13 +341,13 @@ fn build_solver_result<'a, 'b, S: Solution>(
     let mut used_items: ItemUsageFlags = smallvec![false; item_group.len()];
     let mut total = Money::from_minor(0, item_group.currency());
     let mut promotion_applications: SmallVec<[PromotionApplication<'b>; 10]> = SmallVec::new();
-    let mut next_bundle_id: usize = 0;
+    let mut next_redemption_idx: usize = 0;
     let mut affected_items: ItemIndexList = ItemIndexList::new();
 
     // Extract which items each promotion selected and their discounted prices
     for instance in promotion_instances.iter() {
         let apps =
-            instance.calculate_item_applications(solution, item_group, &mut next_bundle_id)?;
+            instance.calculate_item_applications(solution, item_group, &mut next_redemption_idx)?;
 
         let (applied_items, updated_used_items, updated_total) =
             apply_promotion_applications(item_group.len(), used_items, total, &apps)?;
@@ -647,7 +647,7 @@ mod tests {
             promotion_key: PromotionKey,
             solution: &dyn Solution,
             item_group: &ItemGroup<'b>,
-            next_bundle_id: &mut usize,
+            next_redemption_idx: &mut usize,
         ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
             let mut applications = SmallVec::new();
             let currency = item_group.currency();
@@ -659,13 +659,13 @@ mod tests {
                     continue;
                 }
 
-                let bundle_id = *next_bundle_id;
-                *next_bundle_id += 1;
+                let redemption_idx = *next_redemption_idx;
+                *next_redemption_idx += 1;
 
                 applications.push(PromotionApplication {
                     promotion_key,
                     item_idx,
-                    bundle_id,
+                    redemption_idx,
                     original_price: *item.price(),
                     final_price: Money::from_minor(self.final_minor.max(0), currency),
                 });
@@ -755,7 +755,7 @@ mod tests {
         let applications = [PromotionApplication {
             promotion_key: PromotionKey::default(),
             item_idx: 1,
-            bundle_id: 0,
+            redemption_idx: 0,
             original_price: Money::from_minor(200, GBP),
             final_price: Money::from_minor(150, GBP),
         }];
@@ -778,7 +778,7 @@ mod tests {
         let applications = [PromotionApplication {
             promotion_key: PromotionKey::default(),
             item_idx: 99,
-            bundle_id: 0,
+            redemption_idx: 0,
             original_price: Money::from_minor(200, GBP),
             final_price: Money::from_minor(150, GBP),
         }];
@@ -931,8 +931,8 @@ mod tests {
         assert_eq!(second_app.original_price, Money::from_minor(300, GBP));
         assert_eq!(second_app.final_price, Money::from_minor(50, GBP));
 
-        // Each item should have a unique bundle_id (DirectDiscountPromotion doesn't bundle)
-        assert_ne!(first_app.bundle_id, second_app.bundle_id);
+        // Each item should have a unique redemption_idx (DirectDiscountPromotion doesn't bundle)
+        assert_ne!(first_app.redemption_idx, second_app.redemption_idx);
 
         Ok(())
     }

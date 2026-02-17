@@ -5,7 +5,7 @@ use rusty_money::{Money, iso::Currency};
 /// Budget constraints for a promotion
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PromotionBudget<'a> {
-    /// Maximum number of applications (items or bundles depending on promotion type)
+    /// Maximum number of applications (redemptions)
     pub application_limit: Option<u32>,
 
     /// Maximum total discount value (original - discounted)

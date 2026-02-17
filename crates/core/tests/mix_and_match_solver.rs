@@ -544,16 +544,16 @@ fn solver_handles_multiple_bundles() -> TestResult {
     assert_eq!(result.promotion_applications.len(), 4);
 
     // Verify bundle IDs are different
-    let bundle_ids: Vec<usize> = result
+    let redemption_idxs: Vec<usize> = result
         .promotion_applications
         .iter()
-        .map(|app| app.bundle_id)
+        .map(|app| app.redemption_idx)
         .collect();
 
-    assert_eq!(bundle_ids.len(), 4);
+    assert_eq!(redemption_idxs.len(), 4);
 
     // Should have exactly 2 distinct bundle IDs
-    let mut unique_ids = bundle_ids.clone();
+    let mut unique_ids = redemption_idxs.clone();
     unique_ids.sort_unstable();
     unique_ids.dedup();
 

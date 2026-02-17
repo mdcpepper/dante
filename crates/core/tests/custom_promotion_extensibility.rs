@@ -98,7 +98,7 @@ impl ILPPromotionVars for ExternalCustomPromotionVars {
         promotion_key: PromotionKey,
         solution: &dyn Solution,
         item_group: &ItemGroup<'b>,
-        next_bundle_id: &mut usize,
+        next_redemption_idx: &mut usize,
     ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
         let mut applications = SmallVec::new();
         let currency = item_group.currency();
@@ -110,13 +110,13 @@ impl ILPPromotionVars for ExternalCustomPromotionVars {
                 continue;
             }
 
-            let bundle_id = *next_bundle_id;
-            *next_bundle_id += 1;
+            let redemption_idx = *next_redemption_idx;
+            *next_redemption_idx += 1;
 
             applications.push(PromotionApplication {
                 promotion_key,
                 item_idx,
-                bundle_id,
+                redemption_idx: redemption_idx,
                 original_price: *item.price(),
                 final_price: Money::from_minor(self.final_minor.max(0), currency),
             });

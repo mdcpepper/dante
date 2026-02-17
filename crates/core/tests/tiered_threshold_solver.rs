@@ -486,7 +486,7 @@ fn only_lower_tier_qualifies() -> TestResult {
 
 /// All items in a tier share the same bundle ID
 #[test]
-fn tier_items_share_bundle_id() -> TestResult {
+fn tier_items_share_redemption_idx() -> TestResult {
     let items = [
         Item::with_tags(
             ProductKey::default(),
@@ -528,15 +528,15 @@ fn tier_items_share_bundle_id() -> TestResult {
 
     assert_eq!(result.promotion_applications.len(), 3);
 
-    // Both cheese items should share the same bundle_id
-    let bundle_ids: Vec<usize> = result
+    // Both cheese items should share the same redemption_idx
+    let redemption_idxs: Vec<usize> = result
         .promotion_applications
         .iter()
-        .map(|a| a.bundle_id)
+        .map(|a| a.redemption_idx)
         .collect();
 
-    assert_eq!(bundle_ids.first(), bundle_ids.get(1));
-    assert_eq!(bundle_ids.first(), bundle_ids.get(2));
+    assert_eq!(redemption_idxs.first(), redemption_idxs.get(1));
+    assert_eq!(redemption_idxs.first(), redemption_idxs.get(2));
 
     Ok(())
 }

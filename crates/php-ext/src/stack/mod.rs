@@ -355,7 +355,7 @@ impl Stack {
                 let application = PromotionApplication::__construct(
                     promotion.clone(),
                     item.clone(),
-                    app.bundle_id,
+                    app.redemption_idx,
                     original_price,
                     final_price,
                 );

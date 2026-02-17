@@ -229,7 +229,7 @@ impl ILPPromotionVars for TieredThresholdPromotionVars {
         promotion_key: PromotionKey,
         solution: &dyn Solution,
         item_group: &ItemGroup<'b>,
-        next_bundle_id: &mut usize,
+        next_redemption_idx: &mut usize,
     ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
         let discounts = self.calculate_item_discounts(solution, item_group)?;
 
@@ -237,8 +237,8 @@ impl ILPPromotionVars for TieredThresholdPromotionVars {
             return Ok(SmallVec::new());
         }
 
-        let bundle_id = *next_bundle_id;
-        *next_bundle_id += 1;
+        let redemption_idx = *next_redemption_idx;
+        *next_redemption_idx += 1;
 
         let currency = item_group.currency();
 
@@ -257,7 +257,7 @@ impl ILPPromotionVars for TieredThresholdPromotionVars {
             applications.push(PromotionApplication {
                 promotion_key,
                 item_idx,
-                bundle_id,
+                redemption_idx: redemption_idx,
                 original_price: Money::from_minor(original_minor, currency),
                 final_price: Money::from_minor(final_minor, currency),
             });
@@ -2114,7 +2114,7 @@ mod tests {
     }
 
     #[test]
-    fn calculate_item_applications_shares_bundle_id() -> TestResult {
+    fn calculate_item_applications_shares_redemption_idx() -> TestResult {
         let items = [
             Item::with_tags(
                 ProductKey::default(),
@@ -2154,19 +2154,19 @@ mod tests {
 
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let mut next_bundle_id = 0_usize;
+        let mut next_redemption_idx = 0_usize;
 
         let apps = vars.as_ref().calculate_item_applications(
             PromotionKey::default(),
             &SelectAllSolution,
             &item_group,
-            &mut next_bundle_id,
+            &mut next_redemption_idx,
         )?;
 
         assert_eq!(apps.len(), 3);
 
-        let first_bundle = apps.first().map(|a| a.bundle_id);
-        let second_bundle = apps.get(1).map(|a| a.bundle_id);
+        let first_bundle = apps.first().map(|a| a.redemption_idx);
+        let second_bundle = apps.get(1).map(|a| a.redemption_idx);
 
         assert_eq!(first_bundle, second_bundle);
         assert_eq!(first_bundle, Some(0));
@@ -2174,7 +2174,7 @@ mod tests {
         let item_indices: Vec<usize> = apps.iter().map(|a| a.item_idx).collect();
 
         assert_eq!(item_indices, vec![0, 1, 2]);
-        assert_eq!(next_bundle_id, 1);
+        assert_eq!(next_redemption_idx, 1);
 
         Ok(())
     }

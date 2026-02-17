@@ -52,7 +52,7 @@ fn render_promotion_pills(promotion_pills: Vec<PromotionPill>) -> AnyView {
             {promotion_pills
                 .into_iter()
                 .map(|pill| {
-                    let pill_text = format!("{} (#{})", pill.label, pill.bundle_id);
+                    let pill_text = format!("{} (#{})", pill.label, pill.redemption_idx);
 
                     view! {
                         <span class="basket-line-pill" style=pill.style>

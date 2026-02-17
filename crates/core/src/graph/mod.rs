@@ -118,7 +118,7 @@ impl<'a> PromotionGraph<'a> {
             });
         }
 
-        let mut next_bundle_id: usize = 0;
+        let mut next_redemption_idx: usize = 0;
 
         // Evaluate the graph starting from the root
         let final_items = evaluate_node(
@@ -126,7 +126,7 @@ impl<'a> PromotionGraph<'a> {
             self.root,
             tracked_items,
             currency,
-            &mut next_bundle_id,
+            &mut next_redemption_idx,
             observer,
         )?;
 
@@ -440,7 +440,7 @@ mod tests {
     }
 
     #[test]
-    fn bundle_ids_are_globally_unique_across_layers() -> TestResult {
+    fn redemption_idxs_are_globally_unique_across_layers() -> TestResult {
         let items = tagged_items();
         let item_group = ItemGroup::new(items, GBP);
 
@@ -462,28 +462,28 @@ mod tests {
 
         let result = graph.evaluate(&item_group)?;
 
-        // Collect all bundle IDs
-        let mut all_bundle_ids: Vec<usize> = Vec::new();
+        // Collect all redemption indexes
+        let mut all_redemption_idxs: Vec<usize> = Vec::new();
         for apps in result.item_applications.values() {
             for app in apps {
-                all_bundle_ids.push(app.bundle_id);
+                all_redemption_idxs.push(app.redemption_idx);
             }
         }
 
-        // Layer 1 assigns bundles for 2 food items, Layer 2 assigns for 3 items
-        // All bundle IDs should be unique across layers
+        // Layer 1 assigns redemptions for 2 food items, Layer 2 assigns for 3 items
+        // All redemption indexes should be unique across layers
         let unique_count = {
-            let mut unique = all_bundle_ids.clone();
+            let mut unique = all_redemption_idxs.clone();
             unique.sort_unstable();
             unique.dedup();
             unique.len()
         };
 
-        // Each application gets its own bundle ID for DirectDiscount
+        // Each application gets its own redemption index for DirectDiscount
         assert_eq!(
-            all_bundle_ids.len(),
+            all_redemption_idxs.len(),
             unique_count,
-            "bundle IDs should be globally unique across layers"
+            "redemption indexes should be globally unique across layers"
         );
 
         Ok(())

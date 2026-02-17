@@ -21,7 +21,7 @@ pub struct PromotionApplication {
     item: ItemRef,
 
     #[php(prop)]
-    bundle_id: usize,
+    redemption_idx: usize,
 
     #[php(prop)]
     original_price: MoneyRef,
@@ -35,14 +35,14 @@ impl PromotionApplication {
     pub fn __construct(
         promotion: PromotionRef,
         item: ItemRef,
-        bundle_id: usize,
+        redemption_idx: usize,
         original_price: MoneyRef,
         final_price: MoneyRef,
     ) -> Self {
         Self {
             promotion,
             item,
-            bundle_id,
+            redemption_idx,
             original_price,
             final_price,
         }
@@ -113,8 +113,8 @@ impl TryFrom<&PromotionApplicationRef> for PromotionApplication {
             PhpException::default("PromotionApplication promotion is invalid.".to_string())
         })?;
 
-        let bundle_id = obj.get_property::<usize>("bundle_id").map_err(|_| {
-            PhpException::default("PromotionApplication bundle_id is invalid.".to_string())
+        let redemption_idx = obj.get_property::<usize>("redemption_idx").map_err(|_| {
+            PhpException::default("PromotionApplication redemption_idx is invalid.".to_string())
         })?;
 
         let original_price = obj
@@ -130,7 +130,7 @@ impl TryFrom<&PromotionApplicationRef> for PromotionApplication {
         Ok(Self {
             promotion,
             item,
-            bundle_id,
+            redemption_idx,
             original_price,
             final_price,
         })

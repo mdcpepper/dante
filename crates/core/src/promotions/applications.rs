@@ -16,8 +16,8 @@ pub struct PromotionApplication<'a> {
     /// Index of the item in the item group
     pub item_idx: usize,
 
-    /// ID assigned to a bundle of items in the same promotion
-    pub bundle_id: usize,
+    /// ID assigned to a redemption of items in the same promotion
+    pub redemption_idx: usize,
 
     /// Original price of the item
     pub original_price: Money<'a, Currency>,
@@ -71,7 +71,7 @@ mod tests {
         let app = PromotionApplication {
             promotion_key: PromotionKey::default(),
             item_idx: 0,
-            bundle_id: 0,
+            redemption_idx: 0,
             original_price: Money::from_minor(200, GBP),
             final_price: Money::from_minor(150, GBP),
         };
@@ -84,7 +84,7 @@ mod tests {
         let app = PromotionApplication {
             promotion_key: PromotionKey::default(),
             item_idx: 0,
-            bundle_id: 0,
+            redemption_idx: 0,
             original_price: Money::from_minor(200, USD),
             final_price: Money::from_minor(150, GBP),
         };
@@ -103,7 +103,7 @@ mod tests {
         let app = PromotionApplication {
             promotion_key: PromotionKey::default(),
             item_idx: 0,
-            bundle_id: 0,
+            redemption_idx: 0,
             original_price: Money::from_minor(0, GBP),
             final_price: Money::from_minor(0, GBP),
         };
@@ -116,7 +116,7 @@ mod tests {
         let app = PromotionApplication {
             promotion_key: PromotionKey::default(),
             item_idx: 0,
-            bundle_id: 0,
+            redemption_idx: 0,
             original_price: Money::from_minor(200, GBP),
             final_price: Money::from_minor(150, GBP),
         };

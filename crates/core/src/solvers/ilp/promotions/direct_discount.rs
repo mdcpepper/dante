@@ -177,7 +177,7 @@ impl ILPPromotionVars for DirectDiscountPromotionVars {
         promotion_key: PromotionKey,
         solution: &dyn Solution,
         item_group: &ItemGroup<'b>,
-        next_bundle_id: &mut usize,
+        next_redemption_idx: &mut usize,
     ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
         let mut applications = SmallVec::new();
         let currency = item_group.currency();
@@ -191,14 +191,14 @@ impl ILPPromotionVars for DirectDiscountPromotionVars {
 
             let discounted_minor = self.discounted_minor_for_item(item_idx)?;
 
-            // For DirectDiscountPromotion, each item gets its own unique bundle_id
-            let bundle_id = *next_bundle_id;
-            *next_bundle_id += 1;
+            // For DirectDiscountPromotion, each item gets its own unique redemption_idx
+            let redemption_idx = *next_redemption_idx;
+            *next_redemption_idx += 1;
 
             applications.push(PromotionApplication {
                 promotion_key,
                 item_idx,
-                bundle_id,
+                redemption_idx,
                 original_price: *item.price(),
                 final_price: Money::from_minor(discounted_minor, currency),
             });
@@ -487,7 +487,8 @@ mod tests {
     }
 
     #[test]
-    fn calculate_item_applications_returns_applications_with_unique_bundle_ids() -> TestResult {
+    fn calculate_item_applications_returns_applications_with_unique_redemption_idxs() -> TestResult
+    {
         let items = [
             Item::new(ProductKey::default(), Money::from_minor(100, GBP)),
             Item::new(ProductKey::default(), Money::from_minor(200, GBP)),
@@ -510,24 +511,24 @@ mod tests {
 
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let mut next_bundle_id = 0_usize;
+        let mut next_redemption_idx = 0_usize;
 
         let apps = vars.as_ref().calculate_item_applications(
             PromotionKey::default(),
             &SelectAllSolution,
             &item_group,
-            &mut next_bundle_id,
+            &mut next_redemption_idx,
         )?;
 
         // Should have 2 applications
         assert_eq!(apps.len(), 2);
 
-        // Each item should have a unique bundle_id
-        assert_eq!(apps.first().map(|a| a.bundle_id), Some(0));
-        assert_eq!(apps.get(1).map(|a| a.bundle_id), Some(1));
+        // Each item should have a unique redemption_idx
+        assert_eq!(apps.first().map(|a| a.redemption_idx), Some(0));
+        assert_eq!(apps.get(1).map(|a| a.redemption_idx), Some(1));
 
-        // Verify next_bundle_id was incremented
-        assert_eq!(next_bundle_id, 2);
+        // Verify next_redemption_idx was incremented
+        assert_eq!(next_redemption_idx, 2);
 
         // Verify prices
         assert_eq!(
@@ -559,7 +560,7 @@ mod tests {
 
         let item_group = item_group_from_items(items);
 
-        let mut next_bundle_id = 0_usize;
+        let mut next_redemption_idx = 0_usize;
 
         let pb = ProblemVariables::new();
         let cost = Expression::default();
@@ -581,7 +582,7 @@ mod tests {
             PromotionKey::default(),
             &SelectAllSolution,
             &item_group,
-            &mut next_bundle_id,
+            &mut next_redemption_idx,
         )?;
 
         assert_eq!(apps.len(), 1);
@@ -589,13 +590,13 @@ mod tests {
             apps.first().map(|a| a.final_price),
             Some(Money::from_minor(50, GBP))
         );
-        assert_eq!(next_bundle_id, 1);
+        assert_eq!(next_redemption_idx, 1);
 
         Ok(())
     }
 
     #[test]
-    fn calculate_item_applications_continues_bundle_id_counter() -> TestResult {
+    fn calculate_item_applications_continues_redemption_idx_counter() -> TestResult {
         let items = [Item::new(
             ProductKey::default(),
             Money::from_minor(100, GBP),
@@ -610,8 +611,8 @@ mod tests {
             PromotionBudget::unlimited(),
         );
 
-        // Start with a non-zero bundle_id (e.g., from previous promotions)
-        let mut next_bundle_id = 5_usize;
+        // Start with a non-zero redemption_idx (e.g., from previous promotions)
+        let mut next_redemption_idx = 5_usize;
 
         let pb = ProblemVariables::new();
         let cost = Expression::default();
@@ -625,12 +626,12 @@ mod tests {
             PromotionKey::default(),
             &SelectAllSolution,
             &item_group,
-            &mut next_bundle_id,
+            &mut next_redemption_idx,
         )?;
 
         assert_eq!(apps.len(), 1);
-        assert_eq!(apps.first().map(|a| a.bundle_id), Some(5));
-        assert_eq!(next_bundle_id, 6);
+        assert_eq!(apps.first().map(|a| a.redemption_idx), Some(5));
+        assert_eq!(next_redemption_idx, 6);
 
         Ok(())
     }

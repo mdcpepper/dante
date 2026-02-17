@@ -528,7 +528,7 @@ impl ILPPromotionVars for PositionalDiscountVars {
         promotion_key: PromotionKey,
         solution: &dyn Solution,
         item_group: &ItemGroup<'b>,
-        next_bundle_id: &mut usize,
+        next_redemption_idx: &mut usize,
     ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
         let mut applications = SmallVec::new();
         let currency = item_group.currency();
@@ -545,8 +545,8 @@ impl ILPPromotionVars for PositionalDiscountVars {
         participating_items.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
 
         for chunk in participating_items.chunks(bundle_size) {
-            let bundle_id = *next_bundle_id;
-            *next_bundle_id += 1;
+            let redemption_idx = *next_redemption_idx;
+            *next_redemption_idx += 1;
 
             for &(item_idx, price_minor) in chunk {
                 let item = item_group.get_item(item_idx)?;
@@ -563,7 +563,7 @@ impl ILPPromotionVars for PositionalDiscountVars {
                 applications.push(PromotionApplication {
                     promotion_key,
                     item_idx,
-                    bundle_id,
+                    redemption_idx: redemption_idx,
                     original_price: *item.price(),
                     final_price,
                 });
@@ -1654,13 +1654,13 @@ mod tests {
 
         let solution = MapSolution::with(&values);
 
-        let mut next_bundle_id = 0;
+        let mut next_redemption_idx = 0;
 
         let applications = vars.calculate_item_applications(
             PromotionKey::default(),
             &solution,
             &item_group,
-            &mut next_bundle_id,
+            &mut next_redemption_idx,
         )?;
 
         assert_eq!(applications.len(), 4);
@@ -1668,7 +1668,7 @@ mod tests {
         let mut by_item = FxHashMap::default();
 
         for app in applications {
-            by_item.insert(app.item_idx, (app.bundle_id, app.final_price));
+            by_item.insert(app.item_idx, (app.redemption_idx, app.final_price));
         }
 
         assert_eq!(by_item.get(&0).map(|(id, _)| *id), Some(0));

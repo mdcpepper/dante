@@ -515,7 +515,7 @@ impl ILPPromotionVars for MixAndMatchVars {
         promotion_key: PromotionKey,
         solution: &dyn Solution,
         item_group: &ItemGroup<'b>,
-        next_bundle_id: &mut usize,
+        next_redemption_idx: &mut usize,
     ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
         let bundles = build_bundles(solution, self);
 
@@ -529,8 +529,8 @@ impl ILPPromotionVars for MixAndMatchVars {
         let mut applications = SmallVec::new();
 
         for bundle in bundles {
-            let bundle_id = *next_bundle_id;
-            *next_bundle_id += 1;
+            let redemption_idx = *next_redemption_idx;
+            *next_redemption_idx += 1;
 
             for item_idx in bundle {
                 let item = item_group.get_item(item_idx)?;
@@ -543,7 +543,7 @@ impl ILPPromotionVars for MixAndMatchVars {
                 applications.push(PromotionApplication {
                     promotion_key,
                     item_idx,
-                    bundle_id,
+                    redemption_idx: redemption_idx,
                     original_price: *item.price(),
                     final_price: Money::from_minor(final_minor, currency),
                 });
@@ -656,18 +656,18 @@ fn build_bundles(solution: &dyn Solution, vars: &MixAndMatchVars) -> Vec<Vec<usi
     let mut bundles = Vec::new();
 
     if vars.y_bundle.is_some() {
-        for bundle_idx in 0..bundles_applied {
+        for redemption_idxx in 0..bundles_applied {
             let mut bundle_items = Vec::new();
 
             for (slot_idx, (min, _max)) in vars.slot_bounds.iter().copied().enumerate() {
                 let items: &[usize] = slot_items.get(slot_idx).map_or(&[], |v| v.as_slice());
-                let start = bundle_idx * min;
+                let start = redemption_idxx * min;
 
                 if start >= items.len() {
                     continue;
                 }
 
-                let end = (bundle_idx + 1) * min;
+                let end = (redemption_idxx + 1) * min;
 
                 if let Some(slice) = items.get(start..items.len().min(end)) {
                     bundle_items.extend_from_slice(slice);
@@ -1608,7 +1608,7 @@ mod tests {
     }
 
     #[test]
-    fn calculate_item_applications_returns_bundle_ids() -> TestResult {
+    fn calculate_item_applications_returns_redemption_idxs() -> TestResult {
         let items: SmallVec<[Item<'_>; 10]> = SmallVec::from_vec(vec![
             Item::with_tags(
                 ProductKey::default(),
@@ -1669,26 +1669,29 @@ mod tests {
         }
 
         let solution = MapSolution::with(&values);
-        let mut next_bundle_id = 0;
+        let mut next_redemption_idx = 0;
 
         let applications = vars.calculate_item_applications(
             promo.key(),
             &solution,
             &item_group,
-            &mut next_bundle_id,
+            &mut next_redemption_idx,
         )?;
 
         assert_eq!(applications.len(), 2);
-        assert_eq!(next_bundle_id, 1); // One bundle created
+        assert_eq!(next_redemption_idx, 1); // One bundle created
 
         // All items should have the same bundle ID
-        assert_eq!(applications[0].bundle_id, applications[1].bundle_id);
+        assert_eq!(
+            applications[0].redemption_idx,
+            applications[1].redemption_idx
+        );
 
         Ok(())
     }
 
     #[test]
-    fn multiple_bundles_increment_bundle_ids() -> TestResult {
+    fn multiple_bundles_increment_redemption_idxs() -> TestResult {
         let items: SmallVec<[Item<'_>; 10]> = SmallVec::from_vec(vec![
             Item::with_tags(
                 ProductKey::default(),
@@ -1761,17 +1764,17 @@ mod tests {
         }
 
         let solution = MapSolution::with(&values);
-        let mut next_bundle_id = 0;
+        let mut next_redemption_idx = 0;
 
         let applications = vars.calculate_item_applications(
             promo.key(),
             &solution,
             &item_group,
-            &mut next_bundle_id,
+            &mut next_redemption_idx,
         )?;
 
         assert_eq!(applications.len(), 4);
-        assert_eq!(next_bundle_id, 2); // Two bundles created
+        assert_eq!(next_redemption_idx, 2); // Two bundles created
 
         Ok(())
     }
@@ -1953,17 +1956,17 @@ mod tests {
 
         // Don't select any items
         let solution = MapSolution::default();
-        let mut next_bundle_id = 0;
+        let mut next_redemption_idx = 0;
 
         let applications = vars.calculate_item_applications(
             promo.key(),
             &solution,
             &item_group,
-            &mut next_bundle_id,
+            &mut next_redemption_idx,
         )?;
 
         assert!(applications.is_empty());
-        assert_eq!(next_bundle_id, 0);
+        assert_eq!(next_redemption_idx, 0);
 
         Ok(())
     }
