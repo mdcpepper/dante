@@ -44,11 +44,11 @@ fn test_comprehensive_fixture_solving() -> TestResult {
         actual_total_minor % 100
     );
 
-    // Verify we have the correct number of promotion applications
+    // Verify we have the correct number of promotion redemptions
     assert_eq!(
-        result.promotion_applications.len(),
+        result.promotion_redemptions.len(),
         13,
-        "Expected exactly 13 promotion applications"
+        "Expected exactly 13 promotion redemptions"
     );
 
     let mut affected_items = result.affected_items;

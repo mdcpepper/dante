@@ -8,7 +8,7 @@ use thiserror::Error;
 use crate::{
     discounts::DiscountError,
     items::groups::{ItemGroup, ItemGroupError},
-    promotions::{Promotion, applications::PromotionApplication},
+    promotions::{Promotion, redemptions::PromotionRedemption},
 };
 
 pub mod ilp;
@@ -58,8 +58,8 @@ pub struct SolverResult<'a> {
     /// Total cost of the items after applying promotions
     pub total: Money<'a, Currency>,
 
-    /// Details of each promotion application (item, bundle, original/final price)
-    pub promotion_applications: SmallVec<[PromotionApplication<'a>; 10]>,
+    /// Details of each promotion redemptions (item, bundle, original/final price)
+    pub promotion_redemptions: SmallVec<[PromotionRedemption<'a>; 10]>,
 }
 
 /// Trait for solving promotion problems on a set of items

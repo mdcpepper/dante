@@ -18,10 +18,10 @@ pub struct PromotionPill {
     /// Promotion name.
     pub label: String,
 
-    /// Bundle id from solver application.
-    pub bundle_id: usize,
+    /// Bundle id from solver redemption.
+    pub redemption_idx: usize,
 
-    /// Inline style derived deterministically from `bundle_id`.
+    /// Inline style derived deterministically from `redemption_idx`.
     pub style: String,
 }
 
@@ -82,8 +82,8 @@ pub fn load_promotions(yaml: &str) -> Result<LoadedPromotions, String> {
 }
 
 /// Deterministic bundle color style derived from bundle id.
-pub fn bundle_pill_style(bundle_id: usize) -> String {
-    let bundle = bundle_id as u64;
+pub fn redemption_pill_style(redemption_idx: usize) -> String {
+    let bundle = redemption_idx as u64;
     let hue = ((bundle * 137 + 47 + (bundle / 24) * 19) % 360) as u16;
 
     let tone_band = (bundle / 12) % 6;
@@ -267,32 +267,32 @@ mod tests {
 
     use super::*;
 
-    // Test bundle_pill_style function
+    // Test redemption_pill_style function
     #[test]
-    fn test_bundle_pill_style_deterministic() {
-        let style1 = bundle_pill_style(0);
-        let style2 = bundle_pill_style(0);
+    fn test_redemption_pill_style_deterministic() {
+        let style1 = redemption_pill_style(0);
+        let style2 = redemption_pill_style(0);
 
         assert_eq!(style1, style2);
     }
 
     #[test]
-    fn test_bundle_pill_style_different_bundles() {
-        let style1 = bundle_pill_style(0);
-        let style2 = bundle_pill_style(1);
+    fn test_redemption_pill_style_different_bundles() {
+        let style1 = redemption_pill_style(0);
+        let style2 = redemption_pill_style(1);
 
         assert_ne!(style1, style2);
     }
 
     #[test]
-    fn test_bundle_pill_style_tone_bands() {
-        // Test different tone bands (based on bundle / 12)
-        let style_band_0 = bundle_pill_style(0);
-        let style_band_1 = bundle_pill_style(12);
-        let style_band_2 = bundle_pill_style(24);
-        let style_band_3 = bundle_pill_style(36);
-        let style_band_4 = bundle_pill_style(48);
-        let style_band_5 = bundle_pill_style(60);
+    fn test_redemption_pill_style_tone_bands() {
+        // Test different tone bands (based on redemption / 12)
+        let style_band_0 = redemption_pill_style(0);
+        let style_band_1 = redemption_pill_style(12);
+        let style_band_2 = redemption_pill_style(24);
+        let style_band_3 = redemption_pill_style(36);
+        let style_band_4 = redemption_pill_style(48);
+        let style_band_5 = redemption_pill_style(60);
 
         // All should be different due to different saturation/lightness values
         assert_ne!(style_band_0, style_band_1);

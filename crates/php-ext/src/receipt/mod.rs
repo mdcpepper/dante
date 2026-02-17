@@ -1,10 +1,10 @@
-//! Receipt and promotion application results
+//! Receipt and promotion redemption results
 
 use ext_php_rs::prelude::*;
 
-use crate::{items::ItemRef, money::MoneyRef, receipt::applications::PromotionApplicationRef};
+use crate::{items::ItemRef, money::MoneyRef, receipt::redemptions::PromotionRedemptionRef};
 
-pub mod applications;
+pub mod redemptions;
 
 #[derive(Debug, Clone)]
 #[php_class]
@@ -20,7 +20,7 @@ pub struct Receipt {
     full_price_items: Vec<ItemRef>,
 
     #[php(prop)]
-    promotion_applications: Vec<PromotionApplicationRef>,
+    promotion_redemptions: Vec<PromotionRedemptionRef>,
 }
 
 #[php_impl]
@@ -29,13 +29,13 @@ impl Receipt {
         subtotal: MoneyRef,
         total: MoneyRef,
         full_price_items: Vec<ItemRef>,
-        promotion_applications: Vec<PromotionApplicationRef>,
+        promotion_redemptions: Vec<PromotionRedemptionRef>,
     ) -> Self {
         Self {
             subtotal,
             total,
             full_price_items,
-            promotion_applications,
+            promotion_redemptions,
         }
     }
 }

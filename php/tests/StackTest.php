@@ -9,7 +9,7 @@ use Lattice\Layer;
 use Lattice\LayerOutput;
 use Lattice\Money;
 use Lattice\Product;
-use Lattice\PromotionApplication;
+use Lattice\PromotionRedemption;
 use Lattice\Promotions\Budget;
 use Lattice\Promotions\DirectDiscountPromotion;
 use Lattice\Qualification;
@@ -207,29 +207,29 @@ it(
         expect($receipt->fullPriceItems)->toHaveCount(1);
         expect($receipt->fullPriceItems[0])->toBe($snackItem);
 
-        expect($receipt->promotionApplications)->toHaveCount(2);
+        expect($receipt->promotionRedemptions)->toHaveCount(2);
 
-        /** @var PromotionApplication $firstApplication */
-        $firstApplication = $receipt->promotionApplications[0];
+        /** @var PromotionRedemption $firstRedemption */
+        $firstRedemption = $receipt->promotionRedemptions[0];
 
-        /** @var PromotionApplication $secondApplication */
-        $secondApplication = $receipt->promotionApplications[1];
+        /** @var PromotionRedemption $secondRedemption */
+        $secondRedemption = $receipt->promotionRedemptions[1];
 
-        expect($firstApplication)->toBeInstanceOf(PromotionApplication::class);
-        expect($firstApplication->promotion)->toBe($elevenOff);
-        expect($firstApplication->item)->toBe($sandwichItem);
-        expect($firstApplication->originalPrice)->toEqual(
+        expect($firstRedemption)->toBeInstanceOf(PromotionRedemption::class);
+        expect($firstRedemption->promotion)->toBe($elevenOff);
+        expect($firstRedemption->item)->toBe($sandwichItem);
+        expect($firstRedemption->originalPrice)->toEqual(
             new Money(100_00, "GBP"),
         );
-        expect($firstApplication->finalPrice)->toEqual(new Money(89_00, "GBP"));
+        expect($firstRedemption->finalPrice)->toEqual(new Money(89_00, "GBP"));
 
-        expect($secondApplication)->toBeInstanceOf(PromotionApplication::class);
-        expect($secondApplication->promotion)->toBe($seventeenOff);
-        expect($secondApplication->item)->toBe($sandwichItem);
-        expect($secondApplication->originalPrice)->toEqual(
+        expect($secondRedemption)->toBeInstanceOf(PromotionRedemption::class);
+        expect($secondRedemption->promotion)->toBe($seventeenOff);
+        expect($secondRedemption->item)->toBe($sandwichItem);
+        expect($secondRedemption->originalPrice)->toEqual(
             new Money(89_00, "GBP"),
         );
-        expect($secondApplication->finalPrice)->toEqual(new Money(7387, "GBP"));
+        expect($secondRedemption->finalPrice)->toEqual(new Money(7387, "GBP"));
     },
 );
 
@@ -304,26 +304,26 @@ it(
         expect($receipt->subtotal)->toEqual(new Money(110_00, "GBP"));
         expect($receipt->total)->toEqual(new Money(99_50, "GBP"));
         expect($receipt->fullPriceItems)->toHaveCount(0);
-        expect($receipt->promotionApplications)->toHaveCount(2);
+        expect($receipt->promotionRedemptions)->toHaveCount(2);
 
-        /** @var PromotionApplication $firstApplication */
-        $firstApplication = $receipt->promotionApplications[0];
+        /** @var PromotionRedemption $firstRedemption */
+        $firstRedemption = $receipt->promotionRedemptions[0];
 
-        /** @var PromotionApplication $secondApplication */
-        $secondApplication = $receipt->promotionApplications[1];
+        /** @var PromotionRedemption $secondRedemption */
+        $secondRedemption = $receipt->promotionRedemptions[1];
 
-        expect($firstApplication->promotion)->toBe($tenOffEligible);
-        expect($firstApplication->item)->toBe($sandwich);
-        expect($firstApplication->originalPrice)->toEqual(
+        expect($firstRedemption->promotion)->toBe($tenOffEligible);
+        expect($firstRedemption->item)->toBe($sandwich);
+        expect($firstRedemption->originalPrice)->toEqual(
             new Money(100_00, "GBP"),
         );
-        expect($firstApplication->finalPrice)->toEqual(new Money(90_00, "GBP"));
+        expect($firstRedemption->finalPrice)->toEqual(new Money(90_00, "GBP"));
 
-        expect($secondApplication->promotion)->toBe($staffDiscount);
-        expect($secondApplication->item)->toBe($snack);
-        expect($secondApplication->originalPrice)->toEqual(
+        expect($secondRedemption->promotion)->toBe($staffDiscount);
+        expect($secondRedemption->item)->toBe($snack);
+        expect($secondRedemption->originalPrice)->toEqual(
             new Money(10_00, "GBP"),
         );
-        expect($secondApplication->finalPrice)->toEqual(new Money(9_50, "GBP"));
+        expect($secondRedemption->finalPrice)->toEqual(new Money(9_50, "GBP"));
     },
 );

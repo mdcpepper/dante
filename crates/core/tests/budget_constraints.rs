@@ -27,7 +27,7 @@ use lattice::{
 };
 
 #[test]
-fn direct_discount_respects_application_limit() -> TestResult {
+fn direct_discount_respects_redemption_limit() -> TestResult {
     let items = [
         Item::with_tags(
             ProductKey::default(),
@@ -49,9 +49,9 @@ fn direct_discount_respects_application_limit() -> TestResult {
     let basket = Basket::with_items(items, GBP)?;
     let item_group = ItemGroup::from(&basket);
 
-    // Budget: maximum 2 applications
+    // Budget: maximum 2 redemptions
     let budget = PromotionBudget {
-        application_limit: Some(2),
+        redemption_limit: Some(2),
         monetary_limit: None,
     };
 
@@ -68,7 +68,7 @@ fn direct_discount_respects_application_limit() -> TestResult {
 
     // Only 2 items should get the discount: 50 + 50 + 100 = 200
     assert_eq!(result.total.to_minor_units(), 200);
-    assert_eq!(result.promotion_applications.len(), 2);
+    assert_eq!(result.promotion_redemptions.len(), 2);
 
     Ok(())
 }
@@ -98,7 +98,7 @@ fn direct_discount_respects_monetary_limit() -> TestResult {
 
     // Budget: maximum 75 pence in total discount (50% off = 50p per item)
     let budget = PromotionBudget {
-        application_limit: None,
+        redemption_limit: None,
         monetary_limit: Some(Money::from_minor(75, GBP)),
     };
 
@@ -121,7 +121,7 @@ fn direct_discount_respects_monetary_limit() -> TestResult {
 }
 
 #[test]
-fn mix_and_match_respects_application_limit() -> TestResult {
+fn mix_and_match_respects_redemption_limit() -> TestResult {
     let items = [
         Item::with_tags(
             ProductKey::default(),
@@ -166,7 +166,7 @@ fn mix_and_match_respects_application_limit() -> TestResult {
 
     // Budget: maximum 1 bundle
     let budget = PromotionBudget {
-        application_limit: Some(1),
+        redemption_limit: Some(1),
         monetary_limit: None,
     };
 
@@ -181,7 +181,7 @@ fn mix_and_match_respects_application_limit() -> TestResult {
 
     // Only one bundle at 350, other two items at full price: 350 + 300 + 100 = 750
     assert_eq!(result.total.to_minor_units(), 750);
-    assert_eq!(result.promotion_applications.len(), 2); // Only one bundle
+    assert_eq!(result.promotion_redemptions.len(), 2); // Only one bundle
 
     Ok(())
 }
@@ -222,7 +222,7 @@ fn mix_and_match_respects_monetary_limit() -> TestResult {
 
     // Budget: maximum 50 pence discount
     let budget = PromotionBudget {
-        application_limit: None,
+        redemption_limit: None,
         monetary_limit: Some(Money::from_minor(50, GBP)),
     };
 
@@ -278,7 +278,7 @@ fn mix_and_match_cheapest_budget_uses_exact_target_discount() -> TestResult {
 
     // Cheapest is 200; 50% off cheapest = 100 total discount.
     let budget = PromotionBudget {
-        application_limit: None,
+        redemption_limit: None,
         monetary_limit: Some(Money::from_minor(100, GBP)),
     };
 
@@ -292,13 +292,13 @@ fn mix_and_match_cheapest_budget_uses_exact_target_discount() -> TestResult {
     let result = ILPSolver::solve(&[promotion], &item_group)?;
 
     assert_eq!(result.total.to_minor_units(), 500);
-    assert_eq!(result.promotion_applications.len(), 2);
+    assert_eq!(result.promotion_redemptions.len(), 2);
 
     Ok(())
 }
 
 #[test]
-fn positional_discount_respects_application_limit() -> TestResult {
+fn positional_discount_respects_redemption_limit() -> TestResult {
     let items = [
         Item::with_tags(
             ProductKey::default(),
@@ -327,7 +327,7 @@ fn positional_discount_respects_application_limit() -> TestResult {
 
     // Budget: maximum 1 bundle (size=2)
     let budget = PromotionBudget {
-        application_limit: Some(1),
+        redemption_limit: Some(1),
         monetary_limit: None,
     };
 
@@ -346,7 +346,7 @@ fn positional_discount_respects_application_limit() -> TestResult {
 
     // Only 1 bundle can be formed: 100 + 0 + 100 + 100 = 300
     assert_eq!(result.total.to_minor_units(), 300);
-    assert_eq!(result.promotion_applications.len(), 2); // Only one bundle
+    assert_eq!(result.promotion_redemptions.len(), 2); // Only one bundle
 
     Ok(())
 }
@@ -381,7 +381,7 @@ fn positional_discount_respects_monetary_limit() -> TestResult {
 
     // Budget: maximum 75 pence discount (can't do 2 full bundles)
     let budget = PromotionBudget {
-        application_limit: None,
+        redemption_limit: None,
         monetary_limit: Some(Money::from_minor(75, GBP)),
     };
 
@@ -406,7 +406,7 @@ fn positional_discount_respects_monetary_limit() -> TestResult {
 }
 
 #[test]
-fn tiered_threshold_application_limit_counts_tiers_not_items() -> TestResult {
+fn tiered_threshold_redemption_limit_counts_tiers_not_items() -> TestResult {
     let items = [
         Item::with_tags(
             ProductKey::default(),
@@ -434,7 +434,7 @@ fn tiered_threshold_application_limit_counts_tiers_not_items() -> TestResult {
     let item_group = ItemGroup::from(&basket);
 
     let budget = PromotionBudget {
-        application_limit: Some(1),
+        redemption_limit: Some(1),
         monetary_limit: None,
     };
 
@@ -456,15 +456,15 @@ fn tiered_threshold_application_limit_counts_tiers_not_items() -> TestResult {
 
     let result = ILPSolver::solve(&[promotion], &item_group)?;
 
-    // One tier application is allowed, so all contributing/discounted items can participate.
+    // One tier redemption is allowed, so all contributing/discounted items can participate.
     assert_eq!(result.total.to_minor_units(), 3000);
-    assert_eq!(result.promotion_applications.len(), 4);
+    assert_eq!(result.promotion_redemptions.len(), 4);
 
     Ok(())
 }
 
 #[test]
-fn tiered_threshold_zero_application_limit_prevents_all_applications() -> TestResult {
+fn tiered_threshold_zero_redemption_limit_prevents_all_redemptions() -> TestResult {
     let items = [
         Item::with_tags(
             ProductKey::default(),
@@ -492,7 +492,7 @@ fn tiered_threshold_zero_application_limit_prevents_all_applications() -> TestRe
     let item_group = ItemGroup::from(&basket);
 
     let budget = PromotionBudget {
-        application_limit: Some(0),
+        redemption_limit: Some(0),
         monetary_limit: None,
     };
 
@@ -515,7 +515,7 @@ fn tiered_threshold_zero_application_limit_prevents_all_applications() -> TestRe
     let result = ILPSolver::solve(&[promotion], &item_group)?;
 
     assert_eq!(result.total.to_minor_units(), 3500);
-    assert_eq!(result.promotion_applications.len(), 0);
+    assert_eq!(result.promotion_redemptions.len(), 0);
 
     Ok(())
 }
@@ -539,7 +539,7 @@ fn tiered_threshold_cheapest_budget_uses_exact_target_discount() -> TestResult {
     let item_group = ItemGroup::from(&basket);
 
     let budget = PromotionBudget {
-        application_limit: None,
+        redemption_limit: None,
         monetary_limit: Some(Money::from_minor(100, GBP)),
     };
 
@@ -562,13 +562,13 @@ fn tiered_threshold_cheapest_budget_uses_exact_target_discount() -> TestResult {
     let result = ILPSolver::solve(&[promotion], &item_group)?;
 
     assert_eq!(result.total.to_minor_units(), 500);
-    assert_eq!(result.promotion_applications.len(), 1);
+    assert_eq!(result.promotion_redemptions.len(), 1);
 
     Ok(())
 }
 
 #[test]
-fn budget_zero_application_limit_prevents_all_applications() -> TestResult {
+fn budget_zero_redemption_limit_prevents_all_redemptions() -> TestResult {
     let items = [
         Item::with_tags(
             ProductKey::default(),
@@ -585,9 +585,9 @@ fn budget_zero_application_limit_prevents_all_applications() -> TestResult {
     let basket = Basket::with_items(items, GBP)?;
     let item_group = ItemGroup::from(&basket);
 
-    // Budget: 0 applications allowed
+    // Budget: 0 redemptions allowed
     let budget = PromotionBudget {
-        application_limit: Some(0),
+        redemption_limit: Some(0),
         monetary_limit: None,
     };
 
@@ -602,15 +602,15 @@ fn budget_zero_application_limit_prevents_all_applications() -> TestResult {
 
     let result = ILPSolver::solve(&[promotion], &item_group)?;
 
-    // No promotion applications
+    // No promotion redemptions
     assert_eq!(result.total.to_minor_units(), 200);
-    assert_eq!(result.promotion_applications.len(), 0);
+    assert_eq!(result.promotion_redemptions.len(), 0);
 
     Ok(())
 }
 
 #[test]
-fn budget_zero_monetary_limit_prevents_all_applications() -> TestResult {
+fn budget_zero_monetary_limit_prevents_all_redemptions() -> TestResult {
     let items = [Item::with_tags(
         ProductKey::default(),
         Money::from_minor(100, GBP),
@@ -622,7 +622,7 @@ fn budget_zero_monetary_limit_prevents_all_applications() -> TestResult {
 
     // Budget: 0 monetary discount allowed
     let budget = PromotionBudget {
-        application_limit: None,
+        redemption_limit: None,
         monetary_limit: Some(Money::from_minor(0, GBP)),
     };
 
@@ -637,9 +637,9 @@ fn budget_zero_monetary_limit_prevents_all_applications() -> TestResult {
 
     let result = ILPSolver::solve(&[promotion], &item_group)?;
 
-    // No promotion applications
+    // No promotion redemptions
     assert_eq!(result.total.to_minor_units(), 100);
-    assert_eq!(result.promotion_applications.len(), 0);
+    assert_eq!(result.promotion_redemptions.len(), 0);
 
     Ok(())
 }
@@ -667,9 +667,9 @@ fn budget_both_limits_enforced() -> TestResult {
     let basket = Basket::with_items(items, GBP)?;
     let item_group = ItemGroup::from(&basket);
 
-    // Budget: max 2 applications AND max 50 pence discount
+    // Budget: max 2 redemptions AND max 50 pence discount
     let budget = PromotionBudget {
-        application_limit: Some(2),
+        redemption_limit: Some(2),
         monetary_limit: Some(Money::from_minor(50, GBP)),
     };
 
@@ -685,8 +685,8 @@ fn budget_both_limits_enforced() -> TestResult {
     let result = ILPSolver::solve(&[promotion], &item_group)?;
 
     // Both constraints should be respected
-    // At most 2 applications and at most 50p discount
-    assert!(result.promotion_applications.len() <= 2);
+    // At most 2 redemptions and at most 50p discount
+    assert!(result.promotion_redemptions.len() <= 2);
     assert!(result.total.to_minor_units() >= 250); // 300 - 50 = 250
 
     Ok(())

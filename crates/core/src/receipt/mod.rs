@@ -23,7 +23,7 @@ use crate::{
     graph::result::LayeredSolverResult,
     pricing::TotalPriceError,
     products::{Product, ProductKey},
-    promotions::{PromotionKey, PromotionMeta, applications::PromotionApplication},
+    promotions::{PromotionKey, PromotionMeta, redemptions::PromotionRedemption},
     solvers::SolverResult,
 };
 
@@ -53,16 +53,16 @@ pub struct Receipt<'a> {
     /// Indexes of items in the basket that were purchased at full price, not in any promotion
     full_price_items: SmallVec<[usize; 10]>,
 
-    /// Promotion application details keyed by basket item index.
+    /// Promotion redemption details keyed by basket item index.
     ///
-    /// Each item may have multiple layered applications (one per promotion layer that
+    /// Each item may have multiple layered redemptions (one per promotion layer that
     /// touched it). For flat solver results, this will contain a single-element `SmallVec`.
-    promotion_applications: FxHashMap<usize, SmallVec<[PromotionApplication<'a>; 3]>>,
+    promotion_redemptions: FxHashMap<usize, SmallVec<[PromotionRedemption<'a>; 3]>>,
 
-    /// Total cost before any promotion applications
+    /// Total cost before any promotion redemptions
     subtotal: Money<'a, Currency>,
 
-    /// Total amount paid for all items after any promotion applications
+    /// Total amount paid for all items after any promotion redemptions
     total: Money<'a, Currency>,
 
     /// Currency used for all monetary values
@@ -74,21 +74,21 @@ impl<'a> Receipt<'a> {
     #[must_use]
     pub fn new(
         full_price_items: SmallVec<[usize; 10]>,
-        promotion_applications: FxHashMap<usize, SmallVec<[PromotionApplication<'a>; 3]>>,
+        promotion_redemptions: FxHashMap<usize, SmallVec<[PromotionRedemption<'a>; 3]>>,
         subtotal: Money<'a, Currency>,
         total: Money<'a, Currency>,
         currency: &'static Currency,
     ) -> Self {
         Self {
             full_price_items,
-            promotion_applications,
+            promotion_redemptions,
             subtotal,
             total,
             currency,
         }
     }
 
-    /// Total cost before any promotion applications
+    /// Total cost before any promotion redemptions
     #[must_use]
     pub fn subtotal(&self) -> Money<'a, Currency> {
         self.subtotal
@@ -142,22 +142,22 @@ impl<'a> Receipt<'a> {
         basket: &'a Basket<'a>,
         result: SolverResult<'a>,
     ) -> Result<Self, ReceiptError> {
-        let mut promotion_applications = FxHashMap::default();
+        let mut promotion_redemptions = FxHashMap::default();
 
-        for app in result.promotion_applications {
+        for app in result.promotion_redemptions {
             // Solver invariants say this can't happen, but map insertion makes it explicit.
             debug_assert!(
-                !promotion_applications.contains_key(&app.item_idx),
-                "duplicate promotion application for item_idx={}",
+                !promotion_redemptions.contains_key(&app.item_idx),
+                "duplicate promotion redemption for item_idx={}",
                 app.item_idx
             );
 
-            promotion_applications.insert(app.item_idx, smallvec![app]);
+            promotion_redemptions.insert(app.item_idx, smallvec![app]);
         }
 
         Ok(Receipt {
             full_price_items: result.unaffected_items,
-            promotion_applications,
+            promotion_redemptions,
             subtotal: basket.subtotal()?,
             total: result.total,
             currency: basket.currency(),
@@ -178,7 +178,7 @@ impl<'a> Receipt<'a> {
 
         Ok(Receipt {
             full_price_items: result.full_price_items,
-            promotion_applications: result.item_applications,
+            promotion_redemptions: result.item_redemptions,
             subtotal: Money::from_minor(subtotal_minor, currency),
             total: result.total,
             currency,
@@ -191,22 +191,22 @@ impl<'a> Receipt<'a> {
         &self.full_price_items
     }
 
-    /// Promotion application details keyed by basket item index.
+    /// Promotion redemption details keyed by basket item index.
     #[must_use]
-    pub fn promotion_applications(
+    pub fn promotion_redemptions(
         &self,
-    ) -> &FxHashMap<usize, SmallVec<[PromotionApplication<'a>; 3]>> {
-        &self.promotion_applications
+    ) -> &FxHashMap<usize, SmallVec<[PromotionRedemption<'a>; 3]>> {
+        &self.promotion_redemptions
     }
 
-    /// Lookup the promotion applications for a given basket item index.
+    /// Lookup the promotion redemptions for a given basket item index.
     ///
-    /// Returns a slice of applications (one per promotion layer that touched this item).
-    pub fn promotion_application_for_item(
+    /// Returns a slice of redemptions (one per promotion layer that touched this item).
+    pub fn promotion_redemption_for_item(
         &self,
         item_idx: usize,
-    ) -> Option<&[PromotionApplication<'a>]> {
-        self.promotion_applications
+    ) -> Option<&[PromotionRedemption<'a>]> {
+        self.promotion_redemptions
             .get(&item_idx)
             .map(SmallVec::as_slice)
     }
@@ -282,8 +282,8 @@ fn append_item_rows(
 
         item_boundary_rows.push(row_writer.current_row);
 
-        match receipt.promotion_applications.get(&item_idx) {
-            Some(apps) if apps.len() == 1 => row_writer.append_single_application_row(
+        match receipt.promotion_redemptions.get(&item_idx) {
+            Some(apps) if apps.len() == 1 => row_writer.append_single_redemption_row(
                 item_idx,
                 &product_name,
                 &product_tags,
@@ -340,18 +340,18 @@ impl RowWriter<'_> {
         }
     }
 
-    fn append_single_application_row(
+    fn append_single_redemption_row(
         &mut self,
         item_idx: usize,
         product_name: &str,
         product_tags: &str,
-        apps: &[PromotionApplication<'_>],
+        redemptions: &[PromotionRedemption<'_>],
     ) -> Result<(), ReceiptError> {
-        let Some(app) = apps.first() else {
+        let Some(redemption) = redemptions.first() else {
             return Ok(());
         };
 
-        let cells = promotion_cells(app, self.promotion_meta, true)?;
+        let cells = promotion_cells(redemption, self.promotion_meta, true)?;
 
         self.builder.push_record([
             format!("#{:<3}", item_idx + 1),
@@ -385,7 +385,7 @@ impl RowWriter<'_> {
         product_name: &str,
         product_tags: &str,
         item_price: &Money<'_, Currency>,
-        apps: &[PromotionApplication<'_>],
+        apps: &[PromotionRedemption<'_>],
     ) -> Result<(), ReceiptError> {
         self.builder.push_record([
             format!("#{:<3}", item_idx + 1),
@@ -530,7 +530,7 @@ fn write_receipt_summary(
     writeln!(out).map_err(|_err| ReceiptError::IO)
 }
 
-/// Cell contents for a single promotion application row.
+/// Cell contents for a single promotion redemption row.
 struct PromotionCells {
     base_price: String,
     final_price: String,
@@ -539,12 +539,12 @@ struct PromotionCells {
     price_color: Color,
 }
 
-/// Build the cell contents for one promotion application row.
+/// Build the cell contents for one promotion redemption row.
 ///
 /// When `is_final` is true the discounted price gets bright green.
 /// Otherwise it gets dark green (an intermediate price feeding into the next layer).
 fn promotion_cells(
-    app: &PromotionApplication<'_>,
+    app: &PromotionRedemption<'_>,
     promotion_meta: &SlotMap<PromotionKey, PromotionMeta>,
     is_final: bool,
 ) -> Result<PromotionCells, ReceiptError> {
@@ -560,7 +560,7 @@ fn promotion_cells(
         app.savings().map_err(ReceiptError::Money)?,
     );
 
-    let bundle_id = format!("#{:<3}", app.bundle_id + 1);
+    let redemption_idx = format!("#{:<3}", app.redemption_idx + 1);
 
     let price_color = if is_final {
         Color::FG_GREEN
@@ -579,7 +579,7 @@ fn promotion_cells(
         base_price: format!("{}", app.original_price),
         final_price: final_price_display,
         savings: savings_display,
-        promotion: format!("{bundle_id} {promo_name}"),
+        promotion: format!("{redemption_idx} {promo_name}"),
         price_color,
     })
 }
@@ -816,17 +816,17 @@ mod tests {
         let basket = Basket::with_items(items, GBP)?;
 
         let promotion_apps = smallvec![
-            PromotionApplication {
+            PromotionRedemption {
                 promotion_key: PromotionKey::default(),
                 item_idx: 0,
-                bundle_id: 0,
+                redemption_idx: 0,
                 original_price: Money::from_minor(100, GBP),
                 final_price: Money::from_minor(75, GBP),
             },
-            PromotionApplication {
+            PromotionRedemption {
                 promotion_key: PromotionKey::default(),
                 item_idx: 2,
-                bundle_id: 1,
+                redemption_idx: 1,
                 original_price: Money::from_minor(300, GBP),
                 final_price: Money::from_minor(225, GBP),
             },
@@ -836,7 +836,7 @@ mod tests {
             affected_items: smallvec![0, 2],
             unaffected_items: smallvec![1],
             total: Money::from_minor(500, GBP), // 75 + 200 + 225
-            promotion_applications: promotion_apps,
+            promotion_redemptions: promotion_apps,
         };
 
         let receipt = Receipt::from_solver_result(&basket, solver_result)?;
@@ -844,7 +844,7 @@ mod tests {
         assert_eq!(receipt.subtotal(), Money::from_minor(600, GBP));
         assert_eq!(receipt.total(), Money::from_minor(500, GBP));
         assert_eq!(receipt.full_price_items(), &[1]);
-        assert_eq!(receipt.promotion_applications().len(), 2);
+        assert_eq!(receipt.promotion_redemptions().len(), 2);
         assert_eq!(receipt.currency(), GBP);
 
         Ok(())
@@ -863,7 +863,7 @@ mod tests {
             affected_items: smallvec![],
             unaffected_items: smallvec![0, 1],
             total: Money::from_minor(300, GBP),
-            promotion_applications: smallvec![],
+            promotion_redemptions: smallvec![],
         };
 
         let receipt = Receipt::from_solver_result(&basket, solver_result)?;
@@ -871,14 +871,14 @@ mod tests {
         assert_eq!(receipt.subtotal(), Money::from_minor(300, GBP));
         assert_eq!(receipt.total(), Money::from_minor(300, GBP));
         assert_eq!(receipt.full_price_items(), &[0, 1]);
-        assert!(receipt.promotion_applications().is_empty());
+        assert!(receipt.promotion_redemptions().is_empty());
         assert_eq!(receipt.savings()?, Money::from_minor(0, GBP));
 
         Ok(())
     }
 
     #[test]
-    fn from_solver_result_verifies_promotion_application_details() -> TestResult {
+    fn from_solver_result_verifies_promotion_redemption_details() -> TestResult {
         let items = [Item::new(
             ProductKey::default(),
             Money::from_minor(100, GBP),
@@ -886,10 +886,10 @@ mod tests {
 
         let basket = Basket::with_items(items, GBP)?;
 
-        let promotion_apps = smallvec![PromotionApplication {
+        let promotion_apps = smallvec![PromotionRedemption {
             promotion_key: PromotionKey::default(),
             item_idx: 0,
-            bundle_id: 42,
+            redemption_idx: 42,
             original_price: Money::from_minor(100, GBP),
             final_price: Money::from_minor(50, GBP),
         }];
@@ -898,35 +898,37 @@ mod tests {
             affected_items: smallvec![0],
             unaffected_items: smallvec![],
             total: Money::from_minor(50, GBP),
-            promotion_applications: promotion_apps,
+            promotion_redemptions: promotion_apps,
         };
 
         let receipt = Receipt::from_solver_result(&basket, solver_result)?;
 
-        let apps = receipt
-            .promotion_application_for_item(0)
-            .ok_or("Expected promotion application")?;
+        let redemptions = receipt
+            .promotion_redemption_for_item(0)
+            .ok_or("Expected promotion redemption")?;
 
-        let app = apps.first().ok_or("Expected at least one application")?;
+        let redemption = redemptions
+            .first()
+            .ok_or("Expected at least one redemption")?;
 
-        assert_eq!(app.item_idx, 0);
-        assert_eq!(app.bundle_id, 42);
-        assert_eq!(app.original_price, Money::from_minor(100, GBP));
-        assert_eq!(app.final_price, Money::from_minor(50, GBP));
+        assert_eq!(redemption.item_idx, 0);
+        assert_eq!(redemption.redemption_idx, 42);
+        assert_eq!(redemption.original_price, Money::from_minor(100, GBP));
+        assert_eq!(redemption.final_price, Money::from_minor(50, GBP));
 
         Ok(())
     }
 
     #[test]
     fn new_accessor_methods_return_expected_values() {
-        let mut promotion_apps = FxHashMap::default();
+        let mut promotion_redemptions = FxHashMap::default();
 
-        promotion_apps.insert(
+        promotion_redemptions.insert(
             1,
-            smallvec![PromotionApplication {
+            smallvec![PromotionRedemption {
                 promotion_key: PromotionKey::default(),
                 item_idx: 1,
-                bundle_id: 0,
+                redemption_idx: 0,
                 original_price: Money::from_minor(200, GBP),
                 final_price: Money::from_minor(150, GBP),
             }],
@@ -934,14 +936,14 @@ mod tests {
 
         let receipt = Receipt::new(
             smallvec![0, 2],
-            promotion_apps,
+            promotion_redemptions,
             Money::from_minor(600, GBP),
             Money::from_minor(550, GBP),
             GBP,
         );
 
         assert_eq!(receipt.full_price_items(), &[0, 2]);
-        assert_eq!(receipt.promotion_applications().len(), 1);
+        assert_eq!(receipt.promotion_redemptions().len(), 1);
         assert_eq!(receipt.currency(), GBP);
     }
 
@@ -976,13 +978,13 @@ mod tests {
         ];
         let basket = Basket::with_items(items, GBP)?;
 
-        let mut promotion_apps = FxHashMap::default();
-        promotion_apps.insert(
+        let mut promotion_redemptions = FxHashMap::default();
+        promotion_redemptions.insert(
             0,
-            smallvec![PromotionApplication {
+            smallvec![PromotionRedemption {
                 promotion_key: promo_key,
                 item_idx: 0,
-                bundle_id: 0,
+                redemption_idx: 0,
                 original_price: apple_price,
                 final_price: Money::from_minor(80, GBP),
             }],
@@ -990,7 +992,7 @@ mod tests {
 
         let receipt = Receipt::new(
             smallvec![1],
-            promotion_apps,
+            promotion_redemptions,
             Money::from_minor(300, GBP),
             Money::from_minor(280, GBP),
             GBP,
@@ -1061,14 +1063,14 @@ mod tests {
 
         let basket = Basket::with_items(items, GBP)?;
 
-        let mut promotion_apps = FxHashMap::default();
+        let mut promotion_redemptions = FxHashMap::default();
 
-        promotion_apps.insert(
+        promotion_redemptions.insert(
             0,
-            smallvec![PromotionApplication {
+            smallvec![PromotionRedemption {
                 promotion_key: PromotionKey::default(),
                 item_idx: 0,
-                bundle_id: 0,
+                redemption_idx: 0,
                 original_price: drink_price,
                 final_price: drink_price,
             }],
@@ -1076,7 +1078,7 @@ mod tests {
 
         let receipt = Receipt::new(
             smallvec![1],
-            promotion_apps,
+            promotion_redemptions,
             Money::from_minor(220, GBP),
             Money::from_minor(220, GBP),
             GBP,
@@ -1114,14 +1116,14 @@ mod tests {
         let items = [Item::new(apple_key, apple_price)];
         let basket = Basket::with_items(items, GBP)?;
 
-        let mut promotion_apps = FxHashMap::default();
+        let mut promotion_redemptions = FxHashMap::default();
 
-        promotion_apps.insert(
+        promotion_redemptions.insert(
             0,
-            smallvec![PromotionApplication {
+            smallvec![PromotionRedemption {
                 promotion_key: promo_key,
                 item_idx: 0,
-                bundle_id: 0,
+                redemption_idx: 0,
                 original_price: apple_price,
                 final_price: Money::from_minor(50, GBP),
             }],
@@ -1129,7 +1131,7 @@ mod tests {
 
         let receipt = Receipt::new(
             smallvec![],
-            promotion_apps,
+            promotion_redemptions,
             Money::from_minor(100, GBP),
             Money::from_minor(50, GBP),
             GBP,
@@ -1149,8 +1151,8 @@ mod tests {
 
     #[cfg(debug_assertions)]
     #[test]
-    #[should_panic(expected = "duplicate promotion application")]
-    fn from_solver_result_panics_on_duplicate_promotion_applications() {
+    #[should_panic(expected = "duplicate promotion redemption")]
+    fn from_solver_result_panics_on_duplicate_promotion_redemptions() {
         let items = [Item::new(
             ProductKey::default(),
             Money::from_minor(100, GBP),
@@ -1158,10 +1160,10 @@ mod tests {
 
         let basket = Basket::with_items(items, GBP).expect("basket should build");
 
-        let app = PromotionApplication {
+        let redemption = PromotionRedemption {
             promotion_key: PromotionKey::default(),
             item_idx: 0,
-            bundle_id: 0,
+            redemption_idx: 0,
             original_price: Money::from_minor(100, GBP),
             final_price: Money::from_minor(50, GBP),
         };
@@ -1170,14 +1172,14 @@ mod tests {
             affected_items: smallvec![0],
             unaffected_items: smallvec![],
             total: Money::from_minor(50, GBP),
-            promotion_applications: smallvec![app.clone(), app],
+            promotion_redemptions: smallvec![redemption.clone(), redemption],
         };
 
         let _ = Receipt::from_solver_result(&basket, solver_result).expect("receipt should build");
     }
 
     #[test]
-    fn write_to_renders_item_savings_with_bundle_id() -> TestResult {
+    fn write_to_renders_item_savings_with_redemption_idx() -> TestResult {
         let mut product_meta = SlotMap::<ProductKey, Product<'_>>::with_key();
         let mut promotion_meta = SlotMap::<PromotionKey, PromotionMeta>::with_key();
 
@@ -1215,25 +1217,25 @@ mod tests {
         ];
         let basket = Basket::with_items(items, GBP)?;
 
-        let mut promotion_apps = FxHashMap::default();
+        let mut promotion_redemptions = FxHashMap::default();
 
-        promotion_apps.insert(
+        promotion_redemptions.insert(
             0,
-            smallvec![PromotionApplication {
+            smallvec![PromotionRedemption {
                 promotion_key: promo_key,
                 item_idx: 0,
-                bundle_id: 5,
+                redemption_idx: 5,
                 original_price: wrap_price,
                 final_price: Money::from_minor(300, GBP),
             }],
         );
 
-        promotion_apps.insert(
+        promotion_redemptions.insert(
             1,
-            smallvec![PromotionApplication {
+            smallvec![PromotionRedemption {
                 promotion_key: promo_key,
                 item_idx: 1,
-                bundle_id: 5,
+                redemption_idx: 5,
                 original_price: drink_price,
                 final_price: Money::from_minor(100, GBP),
             }],
@@ -1241,7 +1243,7 @@ mod tests {
 
         let receipt = Receipt::new(
             smallvec![],
-            promotion_apps,
+            promotion_redemptions,
             Money::from_minor(550, GBP),
             Money::from_minor(400, GBP),
             GBP,
@@ -1254,7 +1256,7 @@ mod tests {
         assert!(output.contains("Chicken Wrap"));
         assert!(output.contains("Water"));
         assert!(output.contains("Meal Deal"));
-        assert!(output.contains("#6")); // bundle_id 5 displayed as 6 (5+1)
+        assert!(output.contains("#6")); // redemption_idx 5 displayed as 6 (5+1)
         assert!(output.contains("Subtotal:"));
         assert!(output.contains("Total:"));
         assert!(output.contains("Savings:"));
@@ -1309,21 +1311,21 @@ mod tests {
 
         let basket = Basket::with_items(items, GBP)?;
 
-        let mut item_applications = FxHashMap::default();
-        item_applications.insert(
+        let mut item_redemptions = FxHashMap::default();
+        item_redemptions.insert(
             0,
             smallvec![
-                PromotionApplication {
+                PromotionRedemption {
                     promotion_key: PromotionKey::default(),
                     item_idx: 0,
-                    bundle_id: 0,
+                    redemption_idx: 0,
                     original_price: Money::from_minor(400, GBP),
                     final_price: Money::from_minor(300, GBP),
                 },
-                PromotionApplication {
+                PromotionRedemption {
                     promotion_key: PromotionKey::default(),
                     item_idx: 0,
-                    bundle_id: 1,
+                    redemption_idx: 1,
                     original_price: Money::from_minor(300, GBP),
                     final_price: Money::from_minor(270, GBP),
                 },
@@ -1332,7 +1334,7 @@ mod tests {
 
         let layered_result = LayeredSolverResult {
             total: Money::from_minor(470, GBP),
-            item_applications,
+            item_redemptions,
             full_price_items: smallvec![1],
         };
 
@@ -1341,12 +1343,12 @@ mod tests {
         assert_eq!(receipt.subtotal(), Money::from_minor(600, GBP));
         assert_eq!(receipt.total(), Money::from_minor(470, GBP));
         assert_eq!(receipt.full_price_items(), &[1]);
-        assert_eq!(receipt.promotion_applications().len(), 1);
+        assert_eq!(receipt.promotion_redemptions().len(), 1);
 
-        let apps = receipt
-            .promotion_application_for_item(0)
-            .ok_or("Expected applications for item 0")?;
-        assert_eq!(apps.len(), 2);
+        let redemptions = receipt
+            .promotion_redemption_for_item(0)
+            .ok_or("Expected redemptions for item 0")?;
+        assert_eq!(redemptions.len(), 2);
 
         Ok(())
     }
@@ -1385,17 +1387,17 @@ mod tests {
         promotion_apps.insert(
             0,
             smallvec![
-                PromotionApplication {
+                PromotionRedemption {
                     promotion_key: food_sale_key,
                     item_idx: 0,
-                    bundle_id: 0,
+                    redemption_idx: 0,
                     original_price: Money::from_minor(400, GBP),
                     final_price: Money::from_minor(300, GBP),
                 },
-                PromotionApplication {
+                PromotionRedemption {
                     promotion_key: loyalty_key,
                     item_idx: 0,
-                    bundle_id: 2,
+                    redemption_idx: 2,
                     original_price: Money::from_minor(300, GBP),
                     final_price: Money::from_minor(270, GBP),
                 },
@@ -1428,22 +1430,22 @@ mod tests {
     }
 
     #[test]
-    fn promotion_application_for_item_returns_slice() -> TestResult {
+    fn promotion_redemption_for_item_returns_slice() -> TestResult {
         let mut promotion_apps = FxHashMap::default();
         promotion_apps.insert(
             0,
             smallvec![
-                PromotionApplication {
+                PromotionRedemption {
                     promotion_key: PromotionKey::default(),
                     item_idx: 0,
-                    bundle_id: 0,
+                    redemption_idx: 0,
                     original_price: Money::from_minor(100, GBP),
                     final_price: Money::from_minor(80, GBP),
                 },
-                PromotionApplication {
+                PromotionRedemption {
                     promotion_key: PromotionKey::default(),
                     item_idx: 0,
-                    bundle_id: 1,
+                    redemption_idx: 1,
                     original_price: Money::from_minor(80, GBP),
                     final_price: Money::from_minor(72, GBP),
                 },
@@ -1460,12 +1462,12 @@ mod tests {
 
         // Multi-layer item returns slice of length 2
         let apps = receipt
-            .promotion_application_for_item(0)
-            .ok_or("Expected applications")?;
+            .promotion_redemption_for_item(0)
+            .ok_or("Expected redemptions")?;
         assert_eq!(apps.len(), 2);
 
         // Missing item returns None
-        assert!(receipt.promotion_application_for_item(99).is_none());
+        assert!(receipt.promotion_redemption_for_item(99).is_none());
 
         Ok(())
     }

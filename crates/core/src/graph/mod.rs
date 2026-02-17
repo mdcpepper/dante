@@ -15,7 +15,11 @@ use self::{
     evaluation::{TrackedItem, evaluate_node},
     node::LayerNode,
 };
-use crate::{items::groups::ItemGroup, promotions::Promotion, solvers::ilp::ILPObserver};
+use crate::{
+    items::groups::ItemGroup,
+    promotions::{Promotion, redemptions::PromotionRedemption},
+    solvers::ilp::ILPObserver,
+};
 
 pub mod builder;
 pub mod error;
@@ -114,11 +118,11 @@ impl<'a> PromotionGraph<'a> {
             tracked_items.push(TrackedItem {
                 original_basket_idx: idx,
                 item: item.clone(),
-                applications: SmallVec::new(),
+                redemptions: SmallVec::new(),
             });
         }
 
-        let mut next_bundle_id: usize = 0;
+        let mut next_redemption_idx: usize = 0;
 
         // Evaluate the graph starting from the root
         let final_items = evaluate_node(
@@ -126,33 +130,31 @@ impl<'a> PromotionGraph<'a> {
             self.root,
             tracked_items,
             currency,
-            &mut next_bundle_id,
+            &mut next_redemption_idx,
             observer,
         )?;
 
         // Build the result from final tracked items
         let mut total = Money::from_minor(0, currency);
 
-        let mut item_applications: FxHashMap<
-            usize,
-            SmallVec<[crate::promotions::applications::PromotionApplication<'b>; 3]>,
-        > = FxHashMap::default();
+        let mut item_redemptions: FxHashMap<usize, SmallVec<[PromotionRedemption<'b>; 3]>> =
+            FxHashMap::default();
 
         let mut full_price_items: SmallVec<[usize; 10]> = SmallVec::new();
 
         for tracked in &final_items {
             total = total.add(*tracked.item.price())?;
 
-            if tracked.applications.is_empty() {
+            if tracked.redemptions.is_empty() {
                 full_price_items.push(tracked.original_basket_idx);
             } else {
-                item_applications.insert(tracked.original_basket_idx, tracked.applications.clone());
+                item_redemptions.insert(tracked.original_basket_idx, tracked.redemptions.clone());
             }
         }
 
         Ok(LayeredSolverResult {
             total,
-            item_applications,
+            item_redemptions,
             full_price_items,
         })
     }
@@ -309,33 +311,33 @@ mod tests {
             "split routing should apply different discounts to promoted vs unpromoted"
         );
 
-        // Items 0 and 2 should have 2 applications each (food deal + loyalty)
-        let apps_0 = result.item_applications.get(&0);
+        // Items 0 and 2 should have 2 redemptions each (food deal + loyalty)
+        let apps_0 = result.item_redemptions.get(&0);
 
-        assert!(apps_0.is_some(), "item 0 should have applications");
+        assert!(apps_0.is_some(), "item 0 should have redemptions");
         assert_eq!(
             apps_0.map_or(0, SmallVec::len),
             2,
-            "item 0 should have 2 applications"
+            "item 0 should have 2 redemptions"
         );
 
-        let apps_2 = result.item_applications.get(&2);
+        let apps_2 = result.item_redemptions.get(&2);
 
-        assert!(apps_2.is_some(), "item 2 should have applications");
+        assert!(apps_2.is_some(), "item 2 should have redemptions");
         assert_eq!(
             apps_2.map_or(0, SmallVec::len),
             2,
-            "item 2 should have 2 applications"
+            "item 2 should have 2 redemptions"
         );
 
-        // Item 1 should have 1 application (coupon only)
-        let apps_1 = result.item_applications.get(&1);
+        // Item 1 should have 1 redemption (coupon only)
+        let apps_1 = result.item_redemptions.get(&1);
 
-        assert!(apps_1.is_some(), "item 1 should have applications");
+        assert!(apps_1.is_some(), "item 1 should have redemption");
         assert_eq!(
             apps_1.map_or(0, SmallVec::len),
             1,
-            "item 1 should have 1 application"
+            "item 1 should have 1 redemption"
         );
 
         // No full price items
@@ -406,8 +408,8 @@ mod tests {
             "empty group should be zero"
         );
         assert!(
-            result.item_applications.is_empty(),
-            "no applications expected"
+            result.item_redemptions.is_empty(),
+            "no redemptions expected"
         );
         assert!(
             result.full_price_items.is_empty(),
@@ -440,7 +442,7 @@ mod tests {
     }
 
     #[test]
-    fn bundle_ids_are_globally_unique_across_layers() -> TestResult {
+    fn redemption_idxs_are_globally_unique_across_layers() -> TestResult {
         let items = tagged_items();
         let item_group = ItemGroup::new(items, GBP);
 
@@ -462,28 +464,28 @@ mod tests {
 
         let result = graph.evaluate(&item_group)?;
 
-        // Collect all bundle IDs
-        let mut all_bundle_ids: Vec<usize> = Vec::new();
-        for apps in result.item_applications.values() {
-            for app in apps {
-                all_bundle_ids.push(app.bundle_id);
+        // Collect all redemption indexes
+        let mut all_redemption_idxs: Vec<usize> = Vec::new();
+        for redemptions in result.item_redemptions.values() {
+            for redemption in redemptions {
+                all_redemption_idxs.push(redemption.redemption_idx);
             }
         }
 
-        // Layer 1 assigns bundles for 2 food items, Layer 2 assigns for 3 items
-        // All bundle IDs should be unique across layers
+        // Layer 1 assigns redemptions for 2 food items, Layer 2 assigns for 3 items
+        // All redemption indexes should be unique across layers
         let unique_count = {
-            let mut unique = all_bundle_ids.clone();
+            let mut unique = all_redemption_idxs.clone();
             unique.sort_unstable();
             unique.dedup();
             unique.len()
         };
 
-        // Each application gets its own bundle ID for DirectDiscount
+        // Each redemption gets its own redemption index for DirectDiscount
         assert_eq!(
-            all_bundle_ids.len(),
+            all_redemption_idxs.len(),
             unique_count,
-            "bundle IDs should be globally unique across layers"
+            "redemption indexes should be globally unique across layers"
         );
 
         Ok(())

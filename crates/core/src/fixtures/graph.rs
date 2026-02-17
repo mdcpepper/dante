@@ -319,7 +319,7 @@ mod tests {
         let result = graph.evaluate(&item_group)?;
 
         // All items should have some result
-        let total_items = result.item_applications.len() + result.full_price_items.len();
+        let total_items = result.item_redemptions.len() + result.full_price_items.len();
         assert_eq!(total_items, 7, "all 7 items should be accounted for");
 
         Ok(())

@@ -30,7 +30,7 @@ use lattice::{
 
 use crate::{
     announce,
-    promotions::{PromotionPill, bundle_pill_style},
+    promotions::{PromotionPill, redemption_pill_style},
 };
 
 pub(super) mod dock;
@@ -116,11 +116,11 @@ pub(crate) struct PromotionSavings {
     /// Savings amount for this promotion.
     savings: String,
 
-    /// Number of discounted item applications for this promotion.
-    item_applications: usize,
+    /// Number of discounted item redemptions for this promotion.
+    item_redemptions: usize,
 
     /// Number of distinct bundles for this promotion.
-    bundle_applications: usize,
+    redemptions: usize,
 }
 
 fn build_basket(
@@ -209,13 +209,13 @@ fn solve_basket(
             .get(item.product())
             .ok_or_else(|| "Missing product metadata while rendering basket".to_string())?;
 
-        let applications = receipt.promotion_application_for_item(basket_index);
+        let redemptions = receipt.promotion_redemption_for_item(basket_index);
 
-        let final_price = applications
+        let final_price = redemptions
             .and_then(|apps| apps.last().map(|app| app.final_price))
             .map_or_else(|| format_money(item.price()), |price| format_money(&price));
 
-        let promotions = applications.map_or_else(Vec::new, |apps| {
+        let promotions = redemptions.map_or_else(Vec::new, |apps| {
             apps.iter()
                 .filter_map(|app| {
                     solver_data
@@ -223,8 +223,8 @@ fn solve_basket(
                         .get(app.promotion_key)
                         .map(|label| PromotionPill {
                             label: label.clone(),
-                            bundle_id: app.bundle_id + 1,
-                            style: bundle_pill_style(app.bundle_id),
+                            redemption_idx: app.redemption_idx + 1,
+                            style: redemption_pill_style(app.redemption_idx),
                         })
                 })
                 .collect()
@@ -265,8 +265,8 @@ fn solve_basket(
 struct PromotionAggregate {
     name: String,
     savings_minor: i64,
-    item_applications: usize,
-    bundle_ids: FxHashSet<usize>,
+    item_redemptions: usize,
+    redemption_idxs: FxHashSet<usize>,
 }
 
 fn collect_promotion_savings(
@@ -275,9 +275,9 @@ fn collect_promotion_savings(
 ) -> Result<Vec<PromotionSavings>, String> {
     let mut by_promotion: FxHashMap<PromotionKey, PromotionAggregate> = FxHashMap::default();
 
-    for applications in receipt.promotion_applications().values() {
-        for app in applications {
-            let app_savings_minor = app
+    for redemptions in receipt.promotion_redemptions().values() {
+        for redemption in redemptions {
+            let app_savings_minor = redemption
                 .savings()
                 .map_err(|error| format!("Failed to compute promotion savings: {error}"))?
                 .to_minor_units();
@@ -288,23 +288,22 @@ fn collect_promotion_savings(
 
             let promotion_name = solver_data
                 .promotion_names
-                .get(app.promotion_key)
+                .get(redemption.promotion_key)
                 .cloned()
                 .unwrap_or_else(|| "Unknown promotion".to_string());
 
-            let aggregate =
-                by_promotion
-                    .entry(app.promotion_key)
-                    .or_insert_with(|| PromotionAggregate {
-                        name: promotion_name,
-                        savings_minor: 0,
-                        item_applications: 0,
-                        bundle_ids: FxHashSet::default(),
-                    });
+            let aggregate = by_promotion
+                .entry(redemption.promotion_key)
+                .or_insert_with(|| PromotionAggregate {
+                    name: promotion_name,
+                    savings_minor: 0,
+                    item_redemptions: 0,
+                    redemption_idxs: FxHashSet::default(),
+                });
 
             aggregate.savings_minor += app_savings_minor;
-            aggregate.item_applications += 1;
-            aggregate.bundle_ids.insert(app.bundle_id);
+            aggregate.item_redemptions += 1;
+            aggregate.redemption_idxs.insert(redemption.redemption_idx);
         }
     }
 
@@ -320,8 +319,8 @@ fn collect_promotion_savings(
     Ok(grouped
         .into_iter()
         .map(|aggregate| PromotionSavings {
-            item_applications: aggregate.item_applications,
-            bundle_applications: aggregate.bundle_ids.len(),
+            item_redemptions: aggregate.item_redemptions,
+            redemptions: aggregate.redemption_idxs.len(),
             savings: format!(
                 "-{}",
                 format_money(&Money::from_minor(
@@ -784,7 +783,7 @@ mod tests {
         line_item::{
             clear_icon_confirmation, is_icon_confirmed, remove_line_item, start_icon_confirmation,
         },
-        summary::format_application_summary,
+        summary::format_redemption_summary,
     };
 
     use super::*;
@@ -962,15 +961,15 @@ mod tests {
     }
 
     #[test]
-    fn test_format_application_summary_mixed_counts() {
-        let result = format_application_summary(3, 1);
+    fn test_format_redemption_summary_mixed_counts() {
+        let result = format_redemption_summary(3, 1);
 
         assert_eq!(result, "× 1 (3 items)");
     }
 
     #[test]
-    fn test_format_application_summary_singular_counts() {
-        let result = format_application_summary(1, 1);
+    fn test_format_redemption_summary_singular_counts() {
+        let result = format_redemption_summary(1, 1);
 
         assert_eq!(result, "× 1 (1 item)");
     }
@@ -1128,8 +1127,8 @@ mod tests {
             .find(|entry| entry.name == "£3.80 Meal Deal")
             .ok_or_else(|| "Expected meal deal entry in savings breakdown".to_string())?;
 
-        assert_eq!(meal_deal.item_applications, 3);
-        assert_eq!(meal_deal.bundle_applications, 1);
+        assert_eq!(meal_deal.item_redemptions, 3);
+        assert_eq!(meal_deal.redemptions, 1);
 
         Ok(())
     }

@@ -13,9 +13,9 @@ use lattice::{
     products::ProductKey,
     promotions::{
         PromotionKey,
-        applications::PromotionApplication,
         budget::PromotionBudget,
         prelude::{ILPPromotion, ILPPromotionVars, ILPState, PromotionVars, i64_to_f64_exact},
+        redemptions::PromotionRedemption,
         types::DirectDiscountPromotion,
     },
     solvers::{
@@ -93,14 +93,14 @@ impl ILPPromotionVars for ExternalCustomPromotionVars {
         Ok(discounts)
     }
 
-    fn calculate_item_applications<'b>(
+    fn calculate_item_redemptions<'b>(
         &self,
         promotion_key: PromotionKey,
         solution: &dyn Solution,
         item_group: &ItemGroup<'b>,
-        next_bundle_id: &mut usize,
-    ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
-        let mut applications = SmallVec::new();
+        next_redemption_idx: &mut usize,
+    ) -> Result<SmallVec<[PromotionRedemption<'b>; 10]>, SolverError> {
+        let mut redemptions = SmallVec::new();
         let currency = item_group.currency();
 
         for item_idx in 0..item_group.len() {
@@ -110,19 +110,19 @@ impl ILPPromotionVars for ExternalCustomPromotionVars {
                 continue;
             }
 
-            let bundle_id = *next_bundle_id;
-            *next_bundle_id += 1;
+            let redemption_idx = *next_redemption_idx;
+            *next_redemption_idx += 1;
 
-            applications.push(PromotionApplication {
+            redemptions.push(PromotionRedemption {
                 promotion_key,
                 item_idx,
-                bundle_id,
+                redemption_idx,
                 original_price: *item.price(),
                 final_price: Money::from_minor(self.final_minor.max(0), currency),
             });
         }
 
-        Ok(applications)
+        Ok(redemptions)
     }
 }
 
@@ -185,10 +185,10 @@ fn solve_supports_external_custom_promotion_types() -> TestResult {
     assert_eq!(result.total.to_minor_units(), 301);
     assert_eq!(result.affected_items.as_slice(), &[2]);
     assert_eq!(result.unaffected_items.as_slice(), &[0, 1]);
-    assert_eq!(result.promotion_applications.len(), 1);
-    assert_eq!(result.promotion_applications[0].item_idx, 2);
+    assert_eq!(result.promotion_redemptions.len(), 1);
+    assert_eq!(result.promotion_redemptions[0].item_idx, 2);
     assert_eq!(
-        result.promotion_applications[0].final_price,
+        result.promotion_redemptions[0].final_price,
         Money::from_minor(1, GBP)
     );
 
@@ -233,7 +233,7 @@ fn solve_handles_builtin_and_external_promotions() -> TestResult {
     assert_eq!(result.total.to_minor_units(), 11);
     assert_eq!(result.affected_items.len(), 2);
     assert!(result.unaffected_items.is_empty());
-    assert_eq!(result.promotion_applications.len(), 2);
+    assert_eq!(result.promotion_redemptions.len(), 2);
 
     Ok(())
 }

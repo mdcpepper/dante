@@ -1,4 +1,4 @@
-//! Promotion Applications
+//! Promotion Redemptions
 
 use decimal_percentage::Percentage;
 use num_traits::FromPrimitive;
@@ -9,15 +9,15 @@ use crate::promotions::PromotionKey;
 
 /// Result of applying a promotion to an item
 #[derive(Debug, Clone)]
-pub struct PromotionApplication<'a> {
+pub struct PromotionRedemption<'a> {
     /// Key of the promotion that was applied
     pub promotion_key: PromotionKey,
 
     /// Index of the item in the item group
     pub item_idx: usize,
 
-    /// ID assigned to a bundle of items in the same promotion
-    pub bundle_id: usize,
+    /// ID assigned to a redemption of items in the same promotion
+    pub redemption_idx: usize,
 
     /// Original price of the item
     pub original_price: Money<'a, Currency>,
@@ -26,8 +26,8 @@ pub struct PromotionApplication<'a> {
     pub final_price: Money<'a, Currency>,
 }
 
-impl<'a> PromotionApplication<'_> {
-    /// Calculate the item savings from this promotion application
+impl<'a> PromotionRedemption<'_> {
+    /// Calculate the item savings from this promotion redemption
     ///
     /// # Errors
     ///
@@ -62,16 +62,17 @@ impl<'a> PromotionApplication<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use rust_decimal::Decimal;
     use rusty_money::iso::{GBP, USD};
 
+    use super::*;
+
     #[test]
     fn savings_returns_difference_between_original_and_final() {
-        let app = PromotionApplication {
+        let app = PromotionRedemption {
             promotion_key: PromotionKey::default(),
             item_idx: 0,
-            bundle_id: 0,
+            redemption_idx: 0,
             original_price: Money::from_minor(200, GBP),
             final_price: Money::from_minor(150, GBP),
         };
@@ -81,10 +82,10 @@ mod tests {
 
     #[test]
     fn savings_errors_on_currency_mismatch() {
-        let app = PromotionApplication {
+        let app = PromotionRedemption {
             promotion_key: PromotionKey::default(),
             item_idx: 0,
-            bundle_id: 0,
+            redemption_idx: 0,
             original_price: Money::from_minor(200, USD),
             final_price: Money::from_minor(150, GBP),
         };
@@ -100,10 +101,10 @@ mod tests {
 
     #[test]
     fn savings_percent_is_zero_when_original_price_is_zero() {
-        let app = PromotionApplication {
+        let app = PromotionRedemption {
             promotion_key: PromotionKey::default(),
             item_idx: 0,
-            bundle_id: 0,
+            redemption_idx: 0,
             original_price: Money::from_minor(0, GBP),
             final_price: Money::from_minor(0, GBP),
         };
@@ -113,10 +114,10 @@ mod tests {
 
     #[test]
     fn savings_percent_is_correct_for_nonzero_original_price() -> Result<(), MoneyError> {
-        let app = PromotionApplication {
+        let app = PromotionRedemption {
             promotion_key: PromotionKey::default(),
             item_idx: 0,
-            bundle_id: 0,
+            redemption_idx: 0,
             original_price: Money::from_minor(200, GBP),
             final_price: Money::from_minor(150, GBP),
         };

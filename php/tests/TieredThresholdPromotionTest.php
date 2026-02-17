@@ -64,7 +64,7 @@ it("can be instantiated", function () {
     expect($promotion->tiers[0]->discount->amount)->toEqual(
         new Money(1_00, "GBP"),
     );
-    expect($promotion->budget->applicationLimit)->toBeNull();
+    expect($promotion->budget->redemptionLimit)->toBeNull();
     expect($promotion->budget->monetaryLimit)->toBeNull();
 });
 
