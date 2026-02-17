@@ -36,8 +36,8 @@ pub struct PromotionsFixture {
 /// Budget constraint fixture
 #[derive(Debug, Deserialize)]
 pub struct BudgetFixture {
-    /// Maximum applications (redemptions)
-    pub applications: Option<u32>,
+    /// Maximum redemptions
+    pub redemptions: Option<u32>,
 
     /// Maximum monetary discount value (e.g., "10.00 GBP")
     pub monetary: Option<String>,
@@ -54,7 +54,7 @@ impl BudgetFixture {
         };
 
         Ok(PromotionBudget {
-            application_limit: self.applications,
+            redemption_limit: self.redemptions,
             monetary_limit: monetary,
         })
     }
@@ -1127,15 +1127,15 @@ value: 0.10
     }
 
     #[test]
-    fn budget_fixture_parses_application_limit() -> Result<(), FixtureError> {
+    fn budget_fixture_parses_redemption_limit() -> Result<(), FixtureError> {
         let budget_fixture = BudgetFixture {
-            applications: Some(5),
+            redemptions: Some(5),
             monetary: None,
         };
 
         let budget = budget_fixture.try_into_budget()?;
 
-        assert_eq!(budget.application_limit, Some(5));
+        assert_eq!(budget.redemption_limit, Some(5));
         assert!(budget.monetary_limit.is_none());
 
         Ok(())
@@ -1144,13 +1144,13 @@ value: 0.10
     #[test]
     fn budget_fixture_parses_monetary_limit() -> Result<(), FixtureError> {
         let budget_fixture = BudgetFixture {
-            applications: None,
+            redemptions: None,
             monetary: Some("2.50 GBP".to_string()),
         };
 
         let budget = budget_fixture.try_into_budget()?;
 
-        assert!(budget.application_limit.is_none());
+        assert!(budget.redemption_limit.is_none());
         assert_eq!(budget.monetary_limit, Some(Money::from_minor(250, GBP)));
 
         Ok(())
@@ -1159,13 +1159,13 @@ value: 0.10
     #[test]
     fn budget_fixture_parses_both_limits() -> Result<(), FixtureError> {
         let budget_fixture = BudgetFixture {
-            applications: Some(10),
+            redemptions: Some(10),
             monetary: Some("5.00 GBP".to_string()),
         };
 
         let budget = budget_fixture.try_into_budget()?;
 
-        assert_eq!(budget.application_limit, Some(10));
+        assert_eq!(budget.redemption_limit, Some(10));
         assert_eq!(budget.monetary_limit, Some(Money::from_minor(500, GBP)));
 
         Ok(())
@@ -1174,13 +1174,13 @@ value: 0.10
     #[test]
     fn budget_fixture_parses_neither_limit() -> Result<(), FixtureError> {
         let budget_fixture = BudgetFixture {
-            applications: None,
+            redemptions: None,
             monetary: None,
         };
 
         let budget = budget_fixture.try_into_budget()?;
 
-        assert!(budget.application_limit.is_none());
+        assert!(budget.redemption_limit.is_none());
         assert!(budget.monetary_limit.is_none());
 
         Ok(())
@@ -1196,7 +1196,7 @@ value: 0.10
                 amount: "25%".to_string(),
             },
             budget: Some(BudgetFixture {
-                applications: Some(3),
+                redemptions: Some(3),
                 monetary: Some("1.00 GBP".to_string()),
             }),
         };
@@ -1221,7 +1221,7 @@ value: 0.10
                 amount: "100%".to_string(),
             },
             budget: Some(BudgetFixture {
-                applications: Some(5),
+                redemptions: Some(5),
                 monetary: None,
             }),
         };
@@ -1283,7 +1283,7 @@ value: 0.10
                 },
             }],
             budget: Some(BudgetFixture {
-                applications: Some(3),
+                redemptions: Some(3),
                 monetary: Some("10.00 GBP".to_string()),
             }),
         };

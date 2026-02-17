@@ -39,7 +39,7 @@ use crate::{
     },
     receipt::{
         Receipt,
-        applications::{PromotionApplication, PromotionApplicationRef},
+        redemptions::{PromotionRedemption, PromotionRedemptionRef},
     },
     stack::layers::{Layer, LayerOutput, LayerRef},
 };
@@ -318,22 +318,21 @@ impl Stack {
             full_price_items.push(item.clone());
         }
 
-        let mut promotion_applications = Vec::new();
-        let mut application_item_indexes: Vec<_> =
-            result.item_applications.keys().copied().collect();
+        let mut promotion_redemptions = Vec::new();
+        let mut redemption_item_indexes: Vec<_> = result.item_redemptions.keys().copied().collect();
 
-        application_item_indexes.sort_unstable();
+        redemption_item_indexes.sort_unstable();
 
-        for item_idx in application_item_indexes {
+        for item_idx in redemption_item_indexes {
             let item = php_items.get(item_idx).ok_or_else(|| {
                 PhpException::from_class::<InvalidStackException>(format!(
-                    "Internal error: application item index {item_idx} is out of bounds."
+                    "Internal error: redemption item index {item_idx} is out of bounds."
                 ))
             })?;
 
-            let apps = result.item_applications.get(&item_idx).ok_or_else(|| {
+            let apps = result.item_redemptions.get(&item_idx).ok_or_else(|| {
                 PhpException::from_class::<InvalidStackException>(format!(
-                    "Internal error: missing applications for item index {item_idx}."
+                    "Internal error: missing redemptions for item index {item_idx}."
                 ))
             })?;
 
@@ -344,7 +343,7 @@ impl Stack {
                         .get(&app.promotion_key)
                         .ok_or_else(|| {
                             PhpException::from_class::<InvalidStackException>(
-                                "Internal error: application references unknown promotion object."
+                                "Internal error: redemption references unknown promotion object."
                                     .to_string(),
                             )
                         })?;
@@ -352,7 +351,7 @@ impl Stack {
                 let original_price = money_ref_from_core(app.original_price)?;
                 let final_price = money_ref_from_core(app.final_price)?;
 
-                let application = PromotionApplication::__construct(
+                let redemption = PromotionRedemption::__construct(
                     promotion.clone(),
                     item.clone(),
                     app.redemption_idx,
@@ -360,7 +359,7 @@ impl Stack {
                     final_price,
                 );
 
-                promotion_applications.push(PromotionApplicationRef::from_application(application));
+                promotion_redemptions.push(PromotionRedemptionRef::from_redemption(redemption));
             }
         }
 
@@ -370,7 +369,7 @@ impl Stack {
             subtotal,
             total,
             full_price_items,
-            promotion_applications,
+            promotion_redemptions,
         ))
     }
 }

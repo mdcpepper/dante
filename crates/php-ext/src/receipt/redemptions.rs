@@ -1,4 +1,4 @@
-//! Promotion Applications
+//! Promotion Redemptions
 
 use ext_php_rs::{
     class::RegisteredClass,
@@ -12,8 +12,8 @@ use crate::{items::ItemRef, money::MoneyRef, promotions::interface::PromotionRef
 
 #[derive(Debug, Clone)]
 #[php_class]
-#[php(name = "Lattice\\PromotionApplication")]
-pub struct PromotionApplication {
+#[php(name = "Lattice\\PromotionRedemption")]
+pub struct PromotionRedemption {
     #[php(prop)]
     promotion: PromotionRef,
 
@@ -31,7 +31,7 @@ pub struct PromotionApplication {
 }
 
 #[php_impl]
-impl PromotionApplication {
+impl PromotionRedemption {
     pub fn __construct(
         promotion: PromotionRef,
         item: ItemRef,
@@ -50,28 +50,28 @@ impl PromotionApplication {
 }
 
 #[derive(Debug)]
-pub struct PromotionApplicationRef(Zval);
+pub struct PromotionRedemptionRef(Zval);
 
-impl PromotionApplicationRef {
-    pub fn from_application(application: PromotionApplication) -> Self {
+impl PromotionRedemptionRef {
+    pub fn from_redemption(redemption: PromotionRedemption) -> Self {
         let mut zv = Zval::new();
 
-        application
+        redemption
             .set_zval(&mut zv, false)
-            .expect("promotion application should always convert to object zval");
+            .expect("promotion redemption should always convert to object zval");
 
         Self(zv)
     }
 }
 
-impl<'a> FromZval<'a> for PromotionApplicationRef {
+impl<'a> FromZval<'a> for PromotionRedemptionRef {
     const TYPE: DataType =
-        DataType::Object(Some(<PromotionApplication as RegisteredClass>::CLASS_NAME));
+        DataType::Object(Some(<PromotionRedemption as RegisteredClass>::CLASS_NAME));
 
     fn from_zval(zval: &'a Zval) -> Option<Self> {
         let obj = zval.object()?;
 
-        if obj.is_instance::<PromotionApplication>() {
+        if obj.is_instance::<PromotionRedemption>() {
             Some(Self(zval.shallow_clone()))
         } else {
             None
@@ -79,15 +79,15 @@ impl<'a> FromZval<'a> for PromotionApplicationRef {
     }
 }
 
-impl Clone for PromotionApplicationRef {
+impl Clone for PromotionRedemptionRef {
     fn clone(&self) -> Self {
         Self(self.0.shallow_clone())
     }
 }
 
-impl IntoZval for PromotionApplicationRef {
+impl IntoZval for PromotionRedemptionRef {
     const TYPE: DataType =
-        DataType::Object(Some(<PromotionApplication as RegisteredClass>::CLASS_NAME));
+        DataType::Object(Some(<PromotionRedemption as RegisteredClass>::CLASS_NAME));
     const NULLABLE: bool = false;
 
     fn set_zval(self, zv: &mut Zval, persistent: bool) -> ext_php_rs::error::Result<()> {
@@ -95,36 +95,36 @@ impl IntoZval for PromotionApplicationRef {
     }
 }
 
-impl TryFrom<&PromotionApplicationRef> for PromotionApplication {
+impl TryFrom<&PromotionRedemptionRef> for PromotionRedemption {
     type Error = PhpException;
 
-    fn try_from(value: &PromotionApplicationRef) -> Result<Self, Self::Error> {
+    fn try_from(value: &PromotionRedemptionRef) -> Result<Self, Self::Error> {
         let Some(obj) = value.0.object() else {
             return Err(PhpException::default(
-                "PromotionApplication object is invalid.".to_string(),
+                "PromotionRedemption object is invalid.".to_string(),
             ));
         };
 
         let item = obj.get_property::<ItemRef>("item").map_err(|_| {
-            PhpException::default("PromotionApplication item is invalid.".to_string())
+            PhpException::default("PromotionRedemption item is invalid.".to_string())
         })?;
 
         let promotion = obj.get_property::<PromotionRef>("promotion").map_err(|_| {
-            PhpException::default("PromotionApplication promotion is invalid.".to_string())
+            PhpException::default("PromotionRedemption promotion is invalid.".to_string())
         })?;
 
         let redemption_idx = obj.get_property::<usize>("redemption_idx").map_err(|_| {
-            PhpException::default("PromotionApplication redemption_idx is invalid.".to_string())
+            PhpException::default("PromotionRedemption redemption_idx is invalid.".to_string())
         })?;
 
         let original_price = obj
             .get_property::<MoneyRef>("original_price")
             .map_err(|_| {
-                PhpException::default("PromotionApplication original_price is invalid.".to_string())
+                PhpException::default("PromotionRedemption original_price is invalid.".to_string())
             })?;
 
         let final_price = obj.get_property::<MoneyRef>("final_price").map_err(|_| {
-            PhpException::default("PromotionApplication final_price is invalid.".to_string())
+            PhpException::default("PromotionRedemption final_price is invalid.".to_string())
         })?;
 
         Ok(Self {
@@ -137,10 +137,10 @@ impl TryFrom<&PromotionApplicationRef> for PromotionApplication {
     }
 }
 
-impl TryFrom<PromotionApplicationRef> for PromotionApplication {
+impl TryFrom<PromotionRedemptionRef> for PromotionRedemption {
     type Error = PhpException;
 
-    fn try_from(value: PromotionApplicationRef) -> Result<Self, Self::Error> {
+    fn try_from(value: PromotionRedemptionRef) -> Result<Self, Self::Error> {
         (&value).try_into()
     }
 }

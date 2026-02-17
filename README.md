@@ -15,7 +15,7 @@ optimisation engine written in Rust.
   * [Tiered Threshold Promotions](#tiered-threshold-promotions)
 * [Qualification](#qualification)
 * [Budgets](#budgets)
-  * [Application Budgets](#application-budgets)
+  * [Redemption Budgets](#redemption-budgets)
   * [Monetary Budgets](#monetary-budgets)
 * [Global Optimisation](#global-optimisation)
 * [Stacking](#stacking)
@@ -26,14 +26,14 @@ optimisation engine written in Rust.
 ## Promotion Types
 
 Promotions are rules that select candidate items via tag qualifications, and
-apply a discount to them. Promotion applications are treated as a global basket
+apply a discount to them. Promotion redemptions are treated as a global basket
 optimisation problem and the combination that produces the lowest total basket 
 price is chosen.
 
 Within a layer, each item is either left at full price or claimed by exactly one 
 promotion. When using a promotion graph, items can flow through multiple layers 
-and accumulate multiple applications (stacking). Promotion types can add their 
-own constraints (e.g. bundled deals) and produce per-item applications 
+and accumulate multiple redemptions (stacking). Promotion types can add their 
+own constraints (e.g. bundled deals) and produce per-item redemptions 
 (including original/final prices and bundle groupings) that can be rendered on 
 a receipt. Each promotion type is documented in its own section below.
 
@@ -475,9 +475,9 @@ by `has_none: [hot]`.
 
 Promotions can be configured with two types of budgets:
 
-### Application Budgets
+### Redemption Budgets
 
-Promotions can be configured with an application count budget, which limits
+Promotions can be configured with a redemption count budget, which limits
 the number of times a promotion can be applied to the basket. This can be used
 to enforce redemption rules such as "once every 30 days" if these are
 pre-calculated for the customer.
@@ -498,11 +498,11 @@ snack-bogof:
     type: percentage_off
     amount: 100%
   budget:
-    applications: 2
+    redemptions: 2
 ```
 
 ```bash
-cargo run --release --example basket -- -f budget-application
+cargo run --release --example basket -- -f budget-redemption
 ```
 
 ```
@@ -528,7 +528,7 @@ cargo run --release --example basket -- -f budget-application
  248µs 685ns (0.000248685s)
 ```
 
-In this example, the BOGOF promotion has a budget of 2 applications. The solver
+In this example, the BOGOF promotion has a budget of 2 redemptions. The solver
 forms exactly 2 bundles (items 2 & 5 and 3 & 6) using the most expensive items,
 leaving the cheaper fruit rollup items (#1 and #4) at full price. It doesn't 
 apply promotions first-come-first-served, but instead finds the best combination 
@@ -596,11 +596,11 @@ Budget accuracy note:
 
 Baskets are globally optimised for the lowest price given the items added and 
 the configured promotions and budgetary constraints. As items are added to the 
-basket, promotions may "steal" products from existing applications if doing so 
-results in a lower basket price, removing the previous application.
+basket, promotions may "steal" products from existing redemptions if doing so 
+results in a lower basket price, removing the previous redemption.
 
 Items may only participate in a single promotion per layer, but can carry multiple 
-applications across layers with [stacking](#stacking).
+redemptions across layers with [stacking](#stacking).
 
 For example, with two configured promotions:
 

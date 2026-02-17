@@ -14,7 +14,7 @@ use crate::{
     discounts::{SimpleDiscount, percent_of_minor},
     items::groups::ItemGroup,
     promotions::{
-        PromotionKey, applications::PromotionApplication, types::PositionalDiscountPromotion,
+        PromotionKey, redemptions::PromotionRedemption, types::PositionalDiscountPromotion,
     },
     solvers::{
         SolverError,
@@ -60,8 +60,8 @@ pub struct PositionalDiscountVars {
     /// Bundle size copied from promotion config.
     bundle_size: usize,
 
-    /// Budget: optional max applications.
-    application_limit: Option<u32>,
+    /// Budget: optional max redemptions.
+    redemption_limit: Option<u32>,
 
     /// Budget: optional max total discount value in minor units.
     monetary_limit_minor: Option<i64>,
@@ -397,9 +397,9 @@ impl PositionalDiscountVars {
         let promotion_key = self.promotion_key;
         let bundle_size = self.bundle_size;
 
-        // Application limit: For positional, this limits bundles
-        // Constraint: sum(participation_vars) <= application_limit * bundle_size
-        if let Some(application_limit) = self.application_limit {
+        // Redemption limit: For positional, this limits bundles
+        // Constraint: sum(participation_vars) <= redemption_limit * bundle_size
+        if let Some(redemption_limit) = self.redemption_limit {
             let participation_sum: Expression =
                 self.item_participation.iter().map(|(_, var)| *var).sum();
 
@@ -408,10 +408,10 @@ impl PositionalDiscountVars {
                     message: "bundle size too large",
                 })?;
 
-            let max_items = i64::from(application_limit)
+            let max_items = i64::from(redemption_limit)
                 .checked_mul(i64::from(bundle_size_u32))
                 .ok_or(SolverError::InvariantViolation {
-                    message: "application limit overflow",
+                    message: "redemption limit overflow",
                 })?;
 
             let limit_f64 = i64_to_f64_exact(max_items)
@@ -419,7 +419,7 @@ impl PositionalDiscountVars {
 
             observer.on_promotion_constraint(
                 promotion_key,
-                "application count budget (bundle limit)",
+                "redemption count budget (bundle limit)",
                 &participation_sum,
                 "<=",
                 limit_f64,
@@ -523,14 +523,14 @@ impl ILPPromotionVars for PositionalDiscountVars {
         Ok(discounts)
     }
 
-    fn calculate_item_applications<'b>(
+    fn calculate_item_redemptions<'b>(
         &self,
         promotion_key: PromotionKey,
         solution: &dyn Solution,
         item_group: &ItemGroup<'b>,
         next_redemption_idx: &mut usize,
-    ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
-        let mut applications = SmallVec::new();
+    ) -> Result<SmallVec<[PromotionRedemption<'b>; 10]>, SolverError> {
+        let mut redemptions = SmallVec::new();
         let currency = item_group.currency();
         let bundle_size = self.bundle_size;
 
@@ -560,17 +560,17 @@ impl ILPPromotionVars for PositionalDiscountVars {
                     Money::from_minor(price_minor, currency)
                 };
 
-                applications.push(PromotionApplication {
+                redemptions.push(PromotionRedemption {
                     promotion_key,
                     item_idx,
-                    redemption_idx: redemption_idx,
+                    redemption_idx,
                     original_price: *item.price(),
                     final_price,
                 });
             }
         }
 
-        Ok(applications)
+        Ok(redemptions)
     }
 }
 
@@ -638,7 +638,7 @@ impl ILPPromotion for PositionalDiscountPromotion<'_> {
         let promotion_key = self.key();
         let runtime_discount = positional_runtime_discount_from_config(self.discount());
         let bundle_size = self.size() as usize;
-        let application_limit = self.budget().application_limit;
+        let redemption_limit = self.budget().redemption_limit;
         let monetary_limit_minor = self
             .budget()
             .monetary_limit
@@ -671,7 +671,7 @@ impl ILPPromotion for PositionalDiscountPromotion<'_> {
                 dfa_data: None,
                 runtime_discount,
                 bundle_size,
-                application_limit,
+                redemption_limit,
                 monetary_limit_minor,
             }));
         }
@@ -809,7 +809,7 @@ impl ILPPromotion for PositionalDiscountPromotion<'_> {
             }),
             runtime_discount,
             bundle_size,
-            application_limit,
+            redemption_limit,
             monetary_limit_minor,
         }))
     }
@@ -1046,7 +1046,7 @@ mod tests {
             }),
             runtime_discount: PositionalRuntimeDiscount::PercentageOff(Percentage::from(0.5)),
             bundle_size: 1,
-            application_limit: None,
+            redemption_limit: None,
             monetary_limit_minor: None,
         };
 
@@ -1098,7 +1098,7 @@ mod tests {
             }),
             runtime_discount: PositionalRuntimeDiscount::PercentageOff(Percentage::from(0.5)),
             bundle_size: 1,
-            application_limit: None,
+            redemption_limit: None,
             monetary_limit_minor: None,
         };
 
@@ -1153,7 +1153,7 @@ mod tests {
             }),
             runtime_discount: PositionalRuntimeDiscount::PercentageOff(Percentage::from(0.5)),
             bundle_size: 1,
-            application_limit: None,
+            redemption_limit: None,
             monetary_limit_minor: None,
         };
 
@@ -1212,7 +1212,7 @@ mod tests {
             }),
             runtime_discount: PositionalRuntimeDiscount::PercentageOff(Percentage::from(0.5)),
             bundle_size: 2,
-            application_limit: None,
+            redemption_limit: None,
             monetary_limit_minor: None,
         };
 
@@ -1452,7 +1452,7 @@ mod tests {
             }),
             runtime_discount: PositionalRuntimeDiscount::PercentageOff(Percentage::from(0.5)),
             bundle_size: 2,
-            application_limit: None,
+            redemption_limit: None,
             monetary_limit_minor: None,
         };
 
@@ -1620,7 +1620,7 @@ mod tests {
     }
 
     #[test]
-    fn calculate_item_applications_groups_by_bundle_and_applies_discounts() -> TestResult {
+    fn calculate_item_redemptions_groups_by_bundle_and_applies_discounts() -> TestResult {
         let item_group = item_group_from_prices(&[400, 300, 200, 100]);
 
         let promo = PositionalDiscountPromotion::new(
@@ -1656,19 +1656,22 @@ mod tests {
 
         let mut next_redemption_idx = 0;
 
-        let applications = vars.calculate_item_applications(
+        let redemptions = vars.calculate_item_redemptions(
             PromotionKey::default(),
             &solution,
             &item_group,
             &mut next_redemption_idx,
         )?;
 
-        assert_eq!(applications.len(), 4);
+        assert_eq!(redemptions.len(), 4);
 
         let mut by_item = FxHashMap::default();
 
-        for app in applications {
-            by_item.insert(app.item_idx, (app.redemption_idx, app.final_price));
+        for redemption in redemptions {
+            by_item.insert(
+                redemption.item_idx,
+                (redemption.redemption_idx, redemption.final_price),
+            );
         }
 
         assert_eq!(by_item.get(&0).map(|(id, _)| *id), Some(0));

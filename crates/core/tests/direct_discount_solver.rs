@@ -53,7 +53,7 @@ fn solver_handles_percentage_off() -> TestResult {
     // Snack item: 150 (full price)
     // Total: 375
     assert_eq!(result.total.to_minor_units(), 375);
-    assert_eq!(result.promotion_applications.len(), 2);
+    assert_eq!(result.promotion_redemptions.len(), 2);
 
     Ok(())
 }
@@ -87,7 +87,7 @@ fn solver_handles_amount_off() -> TestResult {
 
     // Both items get 50 off: (500 - 50) + (300 - 50) = 450 + 250 = 700
     assert_eq!(result.total.to_minor_units(), 700);
-    assert_eq!(result.promotion_applications.len(), 2);
+    assert_eq!(result.promotion_redemptions.len(), 2);
 
     Ok(())
 }
@@ -128,7 +128,7 @@ fn solver_handles_amount_override() -> TestResult {
     // Regular item: 300 (full price)
     // Total: 400
     assert_eq!(result.total.to_minor_units(), 400);
-    assert_eq!(result.promotion_applications.len(), 2);
+    assert_eq!(result.promotion_redemptions.len(), 2);
 
     Ok(())
 }
@@ -177,7 +177,7 @@ fn solver_handles_multiple_overlapping_promotions() -> TestResult {
     // Item 1 has fruit: 200 with 10% off = 180
     // Total: 80 + 180 = 260
     assert_eq!(result.total.to_minor_units(), 260);
-    assert_eq!(result.promotion_applications.len(), 2);
+    assert_eq!(result.promotion_redemptions.len(), 2);
 
     Ok(())
 }
@@ -211,7 +211,7 @@ fn solver_handles_no_matching_tags() -> TestResult {
 
     // No items match, all at full price
     assert_eq!(result.total.to_minor_units(), 300);
-    assert_eq!(result.promotion_applications.len(), 0);
+    assert_eq!(result.promotion_redemptions.len(), 0);
 
     Ok(())
 }
@@ -274,7 +274,7 @@ fn solver_handles_amount_off_capped_at_zero() -> TestResult {
 
     // Should not go negative - capped at 0
     assert_eq!(result.total.to_minor_units(), 0);
-    assert_eq!(result.promotion_applications.len(), 1);
+    assert_eq!(result.promotion_redemptions.len(), 1);
 
     Ok(())
 }
@@ -320,7 +320,7 @@ fn solver_applies_promotion_to_all_matching_items() -> TestResult {
     // Drink at full price: 200
     // Total: 496
     assert_eq!(result.total.to_minor_units(), 496);
-    assert_eq!(result.promotion_applications.len(), 3);
+    assert_eq!(result.promotion_redemptions.len(), 3);
 
     Ok(())
 }

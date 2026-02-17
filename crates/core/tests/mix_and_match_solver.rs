@@ -64,7 +64,7 @@ fn solver_handles_percent_all_items() -> TestResult {
     let result = ILPSolver::solve(&[promotion], &item_group)?;
 
     assert_eq!(result.total.to_minor_units(), 450);
-    assert_eq!(result.promotion_applications.len(), 2);
+    assert_eq!(result.promotion_redemptions.len(), 2);
 
     Ok(())
 }
@@ -113,7 +113,7 @@ fn solver_handles_amount_off_each_item() -> TestResult {
     let result = ILPSolver::solve(&[promotion], &item_group)?;
 
     assert_eq!(result.total.to_minor_units(), 500);
-    assert_eq!(result.promotion_applications.len(), 2);
+    assert_eq!(result.promotion_redemptions.len(), 2);
 
     Ok(())
 }
@@ -162,7 +162,7 @@ fn solver_handles_fixed_price_each_item() -> TestResult {
     let result = ILPSolver::solve(&[promotion], &item_group)?;
 
     assert_eq!(result.total.to_minor_units(), 200);
-    assert_eq!(result.promotion_applications.len(), 2);
+    assert_eq!(result.promotion_redemptions.len(), 2);
 
     Ok(())
 }
@@ -224,7 +224,7 @@ fn solver_handles_percent_cheapest() -> TestResult {
     // All items in bundle participate, cheapest gets discounted
     // Total should be less than full price (1000)
     assert!(result.total.to_minor_units() < 1000);
-    assert_eq!(result.promotion_applications.len(), 3);
+    assert_eq!(result.promotion_redemptions.len(), 3);
 
     Ok(())
 }
@@ -273,7 +273,7 @@ fn solver_handles_amount_off_total() -> TestResult {
     let result = ILPSolver::solve(&[promotion], &item_group)?;
 
     assert_eq!(result.total.to_minor_units(), 500);
-    assert_eq!(result.promotion_applications.len(), 2);
+    assert_eq!(result.promotion_redemptions.len(), 2);
 
     Ok(())
 }
@@ -322,7 +322,7 @@ fn solver_handles_fixed_total() -> TestResult {
     let result = ILPSolver::solve(&[promotion], &item_group)?;
 
     assert_eq!(result.total.to_minor_units(), 500);
-    assert_eq!(result.promotion_applications.len(), 2);
+    assert_eq!(result.promotion_redemptions.len(), 2);
 
     Ok(())
 }
@@ -373,7 +373,7 @@ fn solver_handles_fixed_cheapest() -> TestResult {
     // Bundle formed with cheapest item at fixed price
     // Total should be less than full price (600)
     assert!(result.total.to_minor_units() < 600);
-    assert_eq!(result.promotion_applications.len(), 2);
+    assert_eq!(result.promotion_redemptions.len(), 2);
 
     Ok(())
 }
@@ -424,8 +424,8 @@ fn solver_handles_variable_arity_bundles() -> TestResult {
     assert!(result.total.to_minor_units() <= 300);
 
     // If promotion is applied, verify bundle properties
-    if !result.promotion_applications.is_empty() {
-        assert!(result.promotion_applications.len() >= 2); // At least min bundle size
+    if !result.promotion_redemptions.is_empty() {
+        assert!(result.promotion_redemptions.len() >= 2); // At least min bundle size
         assert!(result.total.to_minor_units() < 300); // Some discount applied
     }
 
@@ -478,7 +478,7 @@ fn solver_handles_variable_arity_with_max() -> TestResult {
     assert!(result.total.to_minor_units() <= 300);
 
     // If promotion is applied, check that discount was beneficial
-    if !result.promotion_applications.is_empty() {
+    if !result.promotion_redemptions.is_empty() {
         assert!(result.total.to_minor_units() < 300);
     }
 
@@ -541,11 +541,11 @@ fn solver_handles_multiple_bundles() -> TestResult {
 
     // Two bundles at 350 each = 700
     assert_eq!(result.total.to_minor_units(), 700);
-    assert_eq!(result.promotion_applications.len(), 4);
+    assert_eq!(result.promotion_redemptions.len(), 4);
 
     // Verify bundle IDs are different
     let redemption_idxs: Vec<usize> = result
-        .promotion_applications
+        .promotion_redemptions
         .iter()
         .map(|app| app.redemption_idx)
         .collect();
@@ -601,7 +601,7 @@ fn solver_skips_infeasible_mix_and_match() -> TestResult {
 
     // No bundle formed, item at full price
     assert_eq!(result.total.to_minor_units(), 400);
-    assert_eq!(result.promotion_applications.len(), 0);
+    assert_eq!(result.promotion_redemptions.len(), 0);
 
     Ok(())
 }

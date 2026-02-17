@@ -89,7 +89,7 @@ fn threshold_met_applies_discount_to_eligible_items() -> TestResult {
     assert_eq!(result.total.to_minor_units(), 4350);
 
     // All contribution and discount items participate in the promotion.
-    assert_eq!(result.promotion_applications.len(), 6);
+    assert_eq!(result.promotion_redemptions.len(), 6);
 
     Ok(())
 }
@@ -134,7 +134,7 @@ fn threshold_not_met_no_discount_applied() -> TestResult {
 
     // All items at full price: 1000 + 500 = 1500
     assert_eq!(result.total.to_minor_units(), 1500);
-    assert_eq!(result.promotion_applications.len(), 0);
+    assert_eq!(result.promotion_redemptions.len(), 0);
 
     Ok(())
 }
@@ -183,7 +183,7 @@ fn item_count_threshold_not_met_no_discount_applied() -> TestResult {
 
     // Spend threshold met (£30 on wine), but only 2 contributing items (< 3 required).
     assert_eq!(result.total.to_minor_units(), 3500);
-    assert_eq!(result.promotion_applications.len(), 0);
+    assert_eq!(result.promotion_redemptions.len(), 0);
 
     Ok(())
 }
@@ -237,7 +237,7 @@ fn item_count_threshold_met_applies_discount() -> TestResult {
 
     // Cheese gets 10% off: 500 -> 450
     assert_eq!(result.total.to_minor_units(), 3450);
-    assert_eq!(result.promotion_applications.len(), 4);
+    assert_eq!(result.promotion_redemptions.len(), 4);
 
     Ok(())
 }
@@ -286,7 +286,7 @@ fn item_count_only_threshold_met_applies_discount() -> TestResult {
 
     // Cheese gets 10% off: 500 -> 450
     assert_eq!(result.total.to_minor_units(), 650);
-    assert_eq!(result.promotion_applications.len(), 3);
+    assert_eq!(result.promotion_redemptions.len(), 3);
 
     Ok(())
 }
@@ -338,7 +338,7 @@ fn upper_threshold_caps_discountable_value_without_disabling_tier() -> TestResul
     // Lower threshold met (>= £30). Upper threshold caps discountable value at £60,
     // so only two £30 items get discounted: 2700 + 2700 + 3000 = 8400.
     assert_eq!(result.total.to_minor_units(), 8400);
-    assert_eq!(result.promotion_applications.len(), 2);
+    assert_eq!(result.promotion_redemptions.len(), 2);
 
     Ok(())
 }
@@ -391,7 +391,7 @@ fn multiple_tiers_qualify_solver_picks_optimal() -> TestResult {
     // vs £5 off each: 5 * 1500 = 7500
     // Solver picks £12 off tier
     assert_eq!(result.total.to_minor_units(), 4000);
-    assert_eq!(result.promotion_applications.len(), 5);
+    assert_eq!(result.promotion_redemptions.len(), 5);
 
     Ok(())
 }
@@ -429,7 +429,7 @@ fn basket_wide_threshold_and_discount() -> TestResult {
 
     // 5% off all: 1425 + 950 + 475 = 2850
     assert_eq!(result.total.to_minor_units(), 2850);
-    assert_eq!(result.promotion_applications.len(), 3);
+    assert_eq!(result.promotion_redemptions.len(), 3);
 
     Ok(())
 }
@@ -479,7 +479,7 @@ fn only_lower_tier_qualifies() -> TestResult {
     // Only £50 tier qualifies (total is £60 < £80)
     // £5 off each of 3 items: 3 * 1500 = 4500
     assert_eq!(result.total.to_minor_units(), 4500);
-    assert_eq!(result.promotion_applications.len(), 3);
+    assert_eq!(result.promotion_redemptions.len(), 3);
 
     Ok(())
 }
@@ -526,11 +526,11 @@ fn tier_items_share_redemption_idx() -> TestResult {
 
     let result = ILPSolver::solve(&[promo], &item_group)?;
 
-    assert_eq!(result.promotion_applications.len(), 3);
+    assert_eq!(result.promotion_redemptions.len(), 3);
 
     // Both cheese items should share the same redemption_idx
     let redemption_idxs: Vec<usize> = result
-        .promotion_applications
+        .promotion_redemptions
         .iter()
         .map(|a| a.redemption_idx)
         .collect();
@@ -552,7 +552,7 @@ fn fixture_based_tiered_threshold() -> TestResult {
     let result = fixture.graph()?.evaluate(&item_group)?;
 
     // Verify the result accounts for all items
-    let total_items = result.item_applications.len() + result.full_price_items.len();
+    let total_items = result.item_redemptions.len() + result.full_price_items.len();
 
     assert_eq!(total_items, 10);
 
@@ -630,10 +630,10 @@ fn contribution_items_are_exclusive_across_promotions() -> TestResult {
 
     // Wine & cheese wins only if all wine contributors participate in that promotion.
     assert_eq!(result.total.to_minor_units(), 3000);
-    assert_eq!(result.promotion_applications.len(), 4);
+    assert_eq!(result.promotion_redemptions.len(), 4);
     assert!(
         result
-            .promotion_applications
+            .promotion_redemptions
             .iter()
             .all(|app| app.promotion_key == wine_cheese_key)
     );

@@ -43,7 +43,7 @@ it("can be instantiated", function () {
     expect($promotion->positions)->toBe([2]);
     expect($promotion->discount)->toBeInstanceOf(SimpleDiscount::class);
     expect($promotion->discount->amount)->toEqual(new Money(5_00, "GBP"));
-    expect($promotion->budget->applicationLimit)->toBeNull();
+    expect($promotion->budget->redemptionLimit)->toBeNull();
     expect($promotion->budget->monetaryLimit)->toBeNull();
 });
 

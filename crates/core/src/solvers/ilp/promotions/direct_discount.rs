@@ -8,9 +8,7 @@ use rusty_money::Money;
 
 use crate::{
     items::groups::ItemGroup,
-    promotions::{
-        PromotionKey, applications::PromotionApplication, types::DirectDiscountPromotion,
-    },
+    promotions::{PromotionKey, redemptions::PromotionRedemption, types::DirectDiscountPromotion},
     solvers::{
         SolverError,
         ilp::{
@@ -27,7 +25,7 @@ use crate::{
 /// binary decision variables in the ILP model.
 #[derive(Debug)]
 pub struct DirectDiscountPromotionVars {
-    /// Promotion key for observer/application output.
+    /// Promotion key for observer/redemption output.
     promotion_key: PromotionKey,
 
     /// Variables for tracking item participation
@@ -36,8 +34,8 @@ pub struct DirectDiscountPromotionVars {
     /// Discounted minor unit value captured during variable creation.
     discounted_minor_by_item: FxHashMap<usize, i64>,
 
-    /// Budget: optional max applications.
-    application_limit: Option<u32>,
+    /// Budget: optional max redemptions.
+    redemption_limit: Option<u32>,
 
     /// Budget: optional max total discount value in minor units.
     monetary_limit_minor: Option<i64>,
@@ -69,18 +67,18 @@ impl DirectDiscountPromotionVars {
         state: &mut ILPState,
         observer: &mut dyn ILPObserver,
     ) -> Result<(), SolverError> {
-        // Application count limit: sum(participation_vars) <= limit
-        if let Some(application_limit) = self.application_limit {
+        // Redemption count limit: sum(participation_vars) <= limit
+        if let Some(redemption_limit) = self.redemption_limit {
             let participation_sum: Expression =
                 self.item_participation.iter().map(|(_, var)| *var).sum();
 
-            let limit_f64 = i64_to_f64_exact(i64::from(application_limit)).ok_or(
-                SolverError::MinorUnitsNotRepresentable(i64::from(application_limit)),
+            let limit_f64 = i64_to_f64_exact(i64::from(redemption_limit)).ok_or(
+                SolverError::MinorUnitsNotRepresentable(i64::from(redemption_limit)),
             )?;
 
             observer.on_promotion_constraint(
                 promotion_key,
-                "application count budget",
+                "redemption count budget",
                 &participation_sum,
                 "<=",
                 limit_f64,
@@ -172,14 +170,14 @@ impl ILPPromotionVars for DirectDiscountPromotionVars {
         Ok(discounts)
     }
 
-    fn calculate_item_applications<'b>(
+    fn calculate_item_redemptions<'b>(
         &self,
         promotion_key: PromotionKey,
         solution: &dyn Solution,
         item_group: &ItemGroup<'b>,
         next_redemption_idx: &mut usize,
-    ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
-        let mut applications = SmallVec::new();
+    ) -> Result<SmallVec<[PromotionRedemption<'b>; 10]>, SolverError> {
+        let mut redemptions = SmallVec::new();
         let currency = item_group.currency();
 
         for item_idx in 0..item_group.len() {
@@ -195,7 +193,7 @@ impl ILPPromotionVars for DirectDiscountPromotionVars {
             let redemption_idx = *next_redemption_idx;
             *next_redemption_idx += 1;
 
-            applications.push(PromotionApplication {
+            redemptions.push(PromotionRedemption {
                 promotion_key,
                 item_idx,
                 redemption_idx,
@@ -204,7 +202,7 @@ impl ILPPromotionVars for DirectDiscountPromotionVars {
             });
         }
 
-        Ok(applications)
+        Ok(redemptions)
     }
 }
 
@@ -284,7 +282,7 @@ impl ILPPromotion for DirectDiscountPromotion<'_> {
             promotion_key,
             item_participation,
             discounted_minor_by_item,
-            application_limit: self.budget().application_limit,
+            redemption_limit: self.budget().redemption_limit,
             monetary_limit_minor: self.budget().monetary_limit.map(|v| v.to_minor_units()),
         }))
     }
@@ -487,8 +485,7 @@ mod tests {
     }
 
     #[test]
-    fn calculate_item_applications_returns_applications_with_unique_redemption_idxs() -> TestResult
-    {
+    fn calculate_item_redemptions_returns_redemptions_with_unique_redemption_idxs() -> TestResult {
         let items = [
             Item::new(ProductKey::default(), Money::from_minor(100, GBP)),
             Item::new(ProductKey::default(), Money::from_minor(200, GBP)),
@@ -513,14 +510,14 @@ mod tests {
 
         let mut next_redemption_idx = 0_usize;
 
-        let apps = vars.as_ref().calculate_item_applications(
+        let apps = vars.as_ref().calculate_item_redemptions(
             PromotionKey::default(),
             &SelectAllSolution,
             &item_group,
             &mut next_redemption_idx,
         )?;
 
-        // Should have 2 applications
+        // Should have 2 redemptions
         assert_eq!(apps.len(), 2);
 
         // Each item should have a unique redemption_idx
@@ -552,7 +549,7 @@ mod tests {
     }
 
     #[test]
-    fn calculate_item_applications_uses_vars_runtime_data() -> TestResult {
+    fn calculate_item_redemptions_uses_vars_runtime_data() -> TestResult {
         let items = [Item::new(
             ProductKey::default(),
             Money::from_minor(100, GBP),
@@ -578,7 +575,7 @@ mod tests {
 
         let vars = promo_with_vars.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let apps = vars.as_ref().calculate_item_applications(
+        let apps = vars.as_ref().calculate_item_redemptions(
             PromotionKey::default(),
             &SelectAllSolution,
             &item_group,
@@ -596,7 +593,7 @@ mod tests {
     }
 
     #[test]
-    fn calculate_item_applications_continues_redemption_idx_counter() -> TestResult {
+    fn calculate_item_redemptions_continues_redemption_idx_counter() -> TestResult {
         let items = [Item::new(
             ProductKey::default(),
             Money::from_minor(100, GBP),
@@ -622,7 +619,7 @@ mod tests {
 
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
 
-        let apps = vars.as_ref().calculate_item_applications(
+        let apps = vars.as_ref().calculate_item_redemptions(
             PromotionKey::default(),
             &SelectAllSolution,
             &item_group,

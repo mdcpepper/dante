@@ -27,7 +27,7 @@ use crate::{
         },
     },
     qualification::{BoolOp, Qualification, Rule, RuleKind},
-    receipt::{Receipt, applications::PromotionApplication},
+    receipt::{Receipt, redemptions::PromotionRedemption},
     stack::{
         InvalidStackException, Stack, StackBuilder,
         layers::{Layer, LayerOutput},
@@ -78,6 +78,6 @@ pub fn get_module(module: ModuleBuilder) -> ModuleBuilder {
         .class::<Layer>()
         .class::<StackBuilder>()
         .class::<Stack>()
-        .class::<PromotionApplication>()
+        .class::<PromotionRedemption>()
         .class::<Receipt>()
 }

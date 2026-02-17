@@ -18,7 +18,7 @@ pub struct PromotionPill {
     /// Promotion name.
     pub label: String,
 
-    /// Bundle id from solver application.
+    /// Bundle id from solver redemption.
     pub redemption_idx: usize,
 
     /// Inline style derived deterministically from `redemption_idx`.

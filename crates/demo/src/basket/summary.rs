@@ -2,14 +2,14 @@ use leptos::prelude::*;
 
 use super::PromotionSavings;
 
-pub(super) fn format_application_summary(item_applications: usize, redemptions: usize) -> String {
-    let item_label = if item_applications == 1 {
+pub(super) fn format_redemption_summary(item_redemptions: usize, redemptions: usize) -> String {
+    let item_label = if item_redemptions == 1 {
         "item"
     } else {
         "items"
     };
 
-    format!("× {redemptions} ({item_applications} {item_label})")
+    format!("× {redemptions} ({item_redemptions} {item_label})")
 }
 
 #[component]
@@ -63,8 +63,8 @@ pub(super) fn BasketSummary(
                                             <li>
                                                 <span>
                                                     {entry.name} " "
-                                                    {format_application_summary(
-                                                        entry.item_applications,
+                                                    {format_redemption_summary(
+                                                        entry.item_redemptions,
                                                         entry.redemptions,
                                                     )}
                                                 </span>

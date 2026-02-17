@@ -9,7 +9,7 @@ use smallvec::SmallVec;
 
 use crate::{
     items::groups::ItemGroup,
-    promotions::{PromotionKey, applications::PromotionApplication},
+    promotions::{PromotionKey, redemptions::PromotionRedemption},
     solvers::{
         SolverError,
         ilp::{ILPObserver, state::ILPState},
@@ -185,25 +185,25 @@ impl<'a> PromotionInstance<'a> {
         )
     }
 
-    /// Post-solve interpretation returning full promotion applications.
+    /// Post-solve interpretation returning full promotion redemptions.
     ///
     /// Reads the solved variable values to determine which items this promotion selected and
-    /// returns [`PromotionApplication`] instances with bundle IDs and price details.
+    /// returns [`PromotionRedemption`] instances with redemption indexes and price details.
     ///
     /// # Errors
     ///
     /// Returns [`SolverError`] if a selected item index is invalid (missing from the item group),
     /// or if the discount for a selected item cannot be computed.
-    pub(crate) fn calculate_item_applications<'b>(
+    pub(crate) fn calculate_item_redemptions<'b>(
         &self,
         solution: &dyn Solution,
         item_group: &ItemGroup<'b>,
         next_redemption_idx: &mut usize,
-    ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
+    ) -> Result<SmallVec<[PromotionRedemption<'b>; 10]>, SolverError> {
         self.vars.as_ref().map_or_else(
             || Ok(SmallVec::new()),
             |vars| {
-                vars.calculate_item_applications(
+                vars.calculate_item_redemptions(
                     self.promotion.key(),
                     solution,
                     item_group,
@@ -218,7 +218,7 @@ impl<'a> PromotionInstance<'a> {
 ///
 /// Implementations represent a fully-compiled promotion runtime:
 /// they own all decision-variable references needed to emit constraints and
-/// to interpret a solved model into discounts/applications.
+/// to interpret a solved model into discounts/redemptions.
 pub trait ILPPromotionVars: Debug + Send + Sync + Any {
     /// Contribute the participation variable(s) for `item_idx` into `expr`.
     fn add_item_participation_term(&self, expr: Expression, item_idx: usize) -> Expression;
@@ -276,19 +276,19 @@ pub trait ILPPromotionVars: Debug + Send + Sync + Any {
         item_group: &ItemGroup<'_>,
     ) -> Result<FxHashMap<usize, (i64, i64)>, SolverError>;
 
-    /// Vars-owned post-solve promotion application extraction.
+    /// Vars-owned post-solve promotion redemption extraction.
     ///
     /// # Errors
     ///
     /// Returns [`SolverError`] if solution interpretation fails, such as
     /// missing item indices in the group or invalid promotion runtime state.
-    fn calculate_item_applications<'b>(
+    fn calculate_item_redemptions<'b>(
         &self,
         promotion_key: PromotionKey,
         solution: &dyn Solution,
         item_group: &ItemGroup<'b>,
         next_redemption_idx: &mut usize,
-    ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError>;
+    ) -> Result<SmallVec<[PromotionRedemption<'b>; 10]>, SolverError>;
 }
 
 /// Promotion variable bundle produced by an ILP promotion implementation.
@@ -470,13 +470,13 @@ mod tests {
 
         let mut next_redemption_idx = 0;
 
-        let applications = instance.calculate_item_applications(
+        let redemptions = instance.calculate_item_redemptions(
             &SelectAllSolution,
             &item_group,
             &mut next_redemption_idx,
         )?;
 
-        assert_eq!(applications.len(), 4);
+        assert_eq!(redemptions.len(), 4);
         assert!(next_redemption_idx > 0);
 
         Ok(())
@@ -604,14 +604,14 @@ mod tests {
 
         let mut next_redemption_idx = 0;
 
-        let applications = instance.calculate_item_applications(
+        let redemptions = instance.calculate_item_redemptions(
             &SelectAllSolution,
             &item_group,
             &mut next_redemption_idx,
         )?;
 
         assert!(!discounts.is_empty());
-        assert!(!applications.is_empty());
+        assert!(!redemptions.is_empty());
 
         Ok(())
     }
@@ -706,13 +706,13 @@ mod tests {
 
         let mut next_redemption_idx = 0;
 
-        let applications = instance.calculate_item_applications(
+        let redemptions = instance.calculate_item_redemptions(
             &SelectAllSolution,
             &item_group,
             &mut next_redemption_idx,
         )?;
 
-        assert!(applications.is_empty());
+        assert!(redemptions.is_empty());
         assert_eq!(next_redemption_idx, 0);
 
         assert_eq!(observer.promotion_variables, 0);
@@ -723,7 +723,7 @@ mod tests {
     }
 
     #[test]
-    fn applications_keep_redemption_idxs_contiguous_across_instances() -> TestResult {
+    fn redemptions_keep_redemption_idxs_contiguous_across_instances() -> TestResult {
         let items = [
             Item::with_tags(
                 ProductKey::default(),
@@ -771,14 +771,14 @@ mod tests {
         let mut redemption_idxs = Vec::new();
 
         for instance in instances.iter() {
-            let applications = instance.calculate_item_applications(
+            let redemptions = instance.calculate_item_redemptions(
                 &SelectAllSolution,
                 &item_group,
                 &mut next_redemption_idx,
             )?;
 
-            for app in applications {
-                redemption_idxs.push(app.redemption_idx);
+            for redemption in redemptions {
+                redemption_idxs.push(redemption.redemption_idx);
             }
         }
 

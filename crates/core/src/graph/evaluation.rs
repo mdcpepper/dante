@@ -13,7 +13,7 @@ use crate::{
         node::{LayerNode, OutputMode},
     },
     items::{Item, groups::ItemGroup},
-    promotions::applications::PromotionApplication,
+    promotions::redemptions::PromotionRedemption,
     solvers::{
         Solver,
         ilp::{ILPSolver, observer::ILPObserver},
@@ -31,8 +31,8 @@ pub(super) struct TrackedItem<'b> {
     /// The item with its current (possibly discounted) price
     pub item: Item<'b>,
 
-    /// Promotion applications accumulated across layers
-    pub applications: SmallVec<[PromotionApplication<'b>; 3]>,
+    /// Promotion redemptions accumulated across layers
+    pub redemptions: SmallVec<[PromotionRedemption<'b>; 3]>,
 }
 
 /// Evaluate a single node in the promotion graph.
@@ -85,7 +85,7 @@ pub fn evaluate_node<'b>(
     }
 
     // Solve the ILP for this layer.
-    let applications = solve_layer(node, &temp_group, observer.as_deref_mut())?;
+    let redemptions = solve_layer(node, &temp_group, observer.as_deref_mut())?;
 
     // Notify observer of layer completion
     if let Some(obs) = observer.as_deref_mut() {
@@ -99,11 +99,12 @@ pub fn evaluate_node<'b>(
 
     let mut max_redemption: Option<usize> = None;
 
-    for app in applications {
-        max_redemption =
-            Some(max_redemption.map_or(app.redemption_idx, |max| max.max(app.redemption_idx)));
-        let local_idx = app.item_idx;
-        let final_price_minor = app.final_price.to_minor_units();
+    for redemption in redemptions {
+        max_redemption = Some(max_redemption.map_or(redemption.redemption_idx, |max| {
+            max.max(redemption.redemption_idx)
+        }));
+        let local_idx = redemption.item_idx;
+        let final_price_minor = redemption.final_price.to_minor_units();
 
         let Some(tracked) = updated_items.get_mut(local_idx) else {
             continue;
@@ -116,13 +117,15 @@ pub fn evaluate_node<'b>(
             tracked.item.tags().clone(),
         );
 
-        // Record the application with remapped indices
-        tracked.applications.push(PromotionApplication {
-            promotion_key: app.promotion_key,
+        // Record the redemption with remapped indices
+        tracked.redemptions.push(PromotionRedemption {
+            promotion_key: redemption.promotion_key,
             item_idx: tracked.original_basket_idx,
-            redemption_idx: app.redemption_idx.saturating_add(redemption_idx_offset),
-            original_price: app.original_price,
-            final_price: app.final_price,
+            redemption_idx: redemption
+                .redemption_idx
+                .saturating_add(redemption_idx_offset),
+            original_price: redemption.original_price,
+            final_price: redemption.final_price,
         });
     }
 
@@ -148,7 +151,7 @@ fn solve_layer<'b>(
     node: &LayerNode<'_>,
     temp_group: &ItemGroup<'b>,
     observer: Option<&mut dyn ILPObserver>,
-) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, GraphError> {
+) -> Result<SmallVec<[PromotionRedemption<'b>; 10]>, GraphError> {
     let result = match observer {
         Some(obs) => ILPSolver::solve_with_observer(&node.promotions, temp_group, obs),
         None => ILPSolver::solve(&node.promotions, temp_group),
@@ -158,7 +161,7 @@ fn solve_layer<'b>(
         source,
     })?;
 
-    Ok(result.promotion_applications)
+    Ok(result.promotion_redemptions)
 }
 
 /// Route items to successor nodes based on output mode.
@@ -197,7 +200,7 @@ fn route_to_successors<'b>(
             let mut unpromoted_items: TrackedItems<'b> = TrackedItems::new();
 
             for item in updated_items {
-                let was_discounted = !item.applications.is_empty();
+                let was_discounted = !item.redemptions.is_empty();
 
                 if was_discounted {
                     promoted_items.push(item);
@@ -272,7 +275,8 @@ mod tests {
         products::ProductKey,
         promotions::{
             Promotion, PromotionKey, budget::PromotionBudget, promotion,
-            qualification::Qualification, types::DirectDiscountPromotion,
+            qualification::Qualification, redemptions::PromotionRedemption,
+            types::DirectDiscountPromotion,
         },
         solvers::ilp::observer::ILPObserver,
     };
@@ -323,7 +327,7 @@ mod tests {
         TrackedItem {
             original_basket_idx: 0,
             item: Item::new(ProductKey::default(), Money::from_minor(price_minor, GBP)),
-            applications: SmallVec::new(),
+            redemptions: SmallVec::new(),
         }
     }
 
@@ -455,15 +459,13 @@ mod tests {
 
         let mut discounted = tracked_item(100);
 
-        discounted
-            .applications
-            .push(crate::promotions::applications::PromotionApplication {
-                promotion_key: PromotionKey::default(),
-                item_idx: 0,
-                redemption_idx: 0,
-                original_price: Money::from_minor(100, GBP),
-                final_price: Money::from_minor(90, GBP),
-            });
+        discounted.redemptions.push(PromotionRedemption {
+            promotion_key: PromotionKey::default(),
+            item_idx: 0,
+            redemption_idx: 0,
+            original_price: Money::from_minor(100, GBP),
+            final_price: Money::from_minor(90, GBP),
+        });
 
         let mut next_redemption_idx = 0;
 

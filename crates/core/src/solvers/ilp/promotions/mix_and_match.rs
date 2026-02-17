@@ -16,7 +16,7 @@ use crate::{
     items::groups::ItemGroup,
     promotions::{
         PromotionKey,
-        applications::PromotionApplication,
+        redemptions::PromotionRedemption,
         types::{MixAndMatchDiscount, MixAndMatchPromotion},
     },
     solvers::{
@@ -70,8 +70,8 @@ pub struct MixAndMatchVars {
     /// Runtime discount mode captured during variable creation.
     runtime_discount: MixAndMatchRuntimeDiscount,
 
-    /// Budget: optional max applications.
-    application_limit: Option<u32>,
+    /// Budget: optional max redemptions.
+    redemption_limit: Option<u32>,
 
     /// Budget: optional max total discount value in minor units.
     monetary_limit_minor: Option<i64>,
@@ -342,19 +342,19 @@ impl MixAndMatchVars {
         state: &mut ILPState,
         observer: &mut dyn ILPObserver,
     ) -> Result<(), SolverError> {
-        // Application limit: For mix-and-match, this limits bundles
-        if let Some(application_limit) = self.application_limit {
+        // Redemption limit: For mix-and-match, this limits bundles
+        if let Some(redemption_limit) = self.redemption_limit {
             // Use bundle counter variable if available
             if let Some(y_bundle) = self.y_bundle {
-                let limit_f64 = i64_to_f64_exact(i64::from(application_limit)).ok_or(
-                    SolverError::MinorUnitsNotRepresentable(i64::from(application_limit)),
+                let limit_f64 = i64_to_f64_exact(i64::from(redemption_limit)).ok_or(
+                    SolverError::MinorUnitsNotRepresentable(i64::from(redemption_limit)),
                 )?;
 
                 let expr = Expression::from(y_bundle);
 
                 observer.on_promotion_constraint(
                     self.promotion_key,
-                    "application count budget (bundle limit)",
+                    "redemption count budget (bundle limit)",
                     &expr,
                     "<=",
                     limit_f64,
@@ -363,13 +363,13 @@ impl MixAndMatchVars {
                 state.add_leq_constraint(expr, limit_f64);
             } else if let Some(bundle_formed) = self.bundle_formed {
                 // Variable-arity bundles: bundle_formed is binary (0 or 1)
-                // application_limit only makes sense if >= 1
-                if application_limit == 0 {
+                // redemption_limit only makes sense if >= 1
+                if redemption_limit == 0 {
                     let expr = Expression::from(bundle_formed);
 
                     observer.on_promotion_constraint(
                         self.promotion_key,
-                        "application count budget (no bundles)",
+                        "redemption count budget (no bundles)",
                         &expr,
                         "=",
                         0.0,
@@ -377,7 +377,7 @@ impl MixAndMatchVars {
 
                     state.add_eq_constraint(expr, 0.0);
                 }
-                // If application_limit >= 1, no constraint needed (bundle_formed is already <= 1)
+                // If redemption_limit >= 1, no constraint needed (bundle_formed is already <= 1)
             }
         }
 
@@ -510,13 +510,13 @@ impl ILPPromotionVars for MixAndMatchVars {
         calculate_discounts_for_vars(solution, self, item_group)
     }
 
-    fn calculate_item_applications<'b>(
+    fn calculate_item_redemptions<'b>(
         &self,
         promotion_key: PromotionKey,
         solution: &dyn Solution,
         item_group: &ItemGroup<'b>,
         next_redemption_idx: &mut usize,
-    ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
+    ) -> Result<SmallVec<[PromotionRedemption<'b>; 10]>, SolverError> {
         let bundles = build_bundles(solution, self);
 
         if bundles.is_empty() {
@@ -526,7 +526,7 @@ impl ILPPromotionVars for MixAndMatchVars {
         let discounts = calculate_discounts_for_vars(solution, self, item_group)?;
         let currency = item_group.currency();
 
-        let mut applications = SmallVec::new();
+        let mut redemptions = SmallVec::new();
 
         for bundle in bundles {
             let redemption_idx = *next_redemption_idx;
@@ -540,17 +540,17 @@ impl ILPPromotionVars for MixAndMatchVars {
                     .get(&item_idx)
                     .map_or(original_minor, |(_, final_minor)| *final_minor);
 
-                applications.push(PromotionApplication {
+                redemptions.push(PromotionRedemption {
                     promotion_key,
                     item_idx,
-                    redemption_idx: redemption_idx,
+                    redemption_idx,
                     original_price: *item.price(),
                     final_price: Money::from_minor(final_minor, currency),
                 });
             }
         }
 
-        Ok(applications)
+        Ok(redemptions)
     }
 }
 
@@ -887,7 +887,7 @@ impl ILPPromotion for MixAndMatchPromotion<'_> {
     ) -> Result<PromotionVars, SolverError> {
         let promotion_key = self.key();
         let runtime_discount = runtime_discount_from_config(self.discount());
-        let application_limit = self.budget().application_limit;
+        let redemption_limit = self.budget().redemption_limit;
 
         let monetary_limit_minor = self
             .budget()
@@ -905,7 +905,7 @@ impl ILPPromotion for MixAndMatchPromotion<'_> {
                 bundle_size: 0,
                 sorted_items: SmallVec::new(),
                 runtime_discount,
-                application_limit,
+                redemption_limit,
                 monetary_limit_minor,
             }));
         }
@@ -944,7 +944,7 @@ impl ILPPromotion for MixAndMatchPromotion<'_> {
                 bundle_size: 0,
                 sorted_items: SmallVec::new(),
                 runtime_discount,
-                application_limit,
+                redemption_limit,
                 monetary_limit_minor,
             }));
         }
@@ -1129,7 +1129,7 @@ impl ILPPromotion for MixAndMatchPromotion<'_> {
             bundle_size,
             sorted_items,
             runtime_discount,
-            application_limit,
+            redemption_limit,
             monetary_limit_minor,
         }))
     }
@@ -1608,7 +1608,7 @@ mod tests {
     }
 
     #[test]
-    fn calculate_item_applications_returns_redemption_idxs() -> TestResult {
+    fn calculate_item_redemptions_returns_redemption_idxs() -> TestResult {
         let items: SmallVec<[Item<'_>; 10]> = SmallVec::from_vec(vec![
             Item::with_tags(
                 ProductKey::default(),
@@ -1671,21 +1671,18 @@ mod tests {
         let solution = MapSolution::with(&values);
         let mut next_redemption_idx = 0;
 
-        let applications = vars.calculate_item_applications(
+        let redemptions = vars.calculate_item_redemptions(
             promo.key(),
             &solution,
             &item_group,
             &mut next_redemption_idx,
         )?;
 
-        assert_eq!(applications.len(), 2);
-        assert_eq!(next_redemption_idx, 1); // One bundle created
+        assert_eq!(redemptions.len(), 2);
+        assert_eq!(next_redemption_idx, 1); // One redemption created
 
-        // All items should have the same bundle ID
-        assert_eq!(
-            applications[0].redemption_idx,
-            applications[1].redemption_idx
-        );
+        // All items should have the same redemption index
+        assert_eq!(redemptions[0].redemption_idx, redemptions[1].redemption_idx);
 
         Ok(())
     }
@@ -1766,15 +1763,15 @@ mod tests {
         let solution = MapSolution::with(&values);
         let mut next_redemption_idx = 0;
 
-        let applications = vars.calculate_item_applications(
+        let redemptions = vars.calculate_item_redemptions(
             promo.key(),
             &solution,
             &item_group,
             &mut next_redemption_idx,
         )?;
 
-        assert_eq!(applications.len(), 4);
-        assert_eq!(next_redemption_idx, 2); // Two bundles created
+        assert_eq!(redemptions.len(), 4);
+        assert_eq!(next_redemption_idx, 2); // Two redemptions created
 
         Ok(())
     }
@@ -1921,7 +1918,7 @@ mod tests {
     }
 
     #[test]
-    fn calculate_item_applications_with_no_bundles() -> TestResult {
+    fn calculate_item_redemptions_with_no_bundles() -> TestResult {
         let items: SmallVec<[Item<'_>; 10]> = SmallVec::from_vec(vec![Item::with_tags(
             ProductKey::default(),
             Money::from_minor(100, GBP),
@@ -1958,14 +1955,14 @@ mod tests {
         let solution = MapSolution::default();
         let mut next_redemption_idx = 0;
 
-        let applications = vars.calculate_item_applications(
+        let redemptions = vars.calculate_item_redemptions(
             promo.key(),
             &solution,
             &item_group,
             &mut next_redemption_idx,
         )?;
 
-        assert!(applications.is_empty());
+        assert!(redemptions.is_empty());
         assert_eq!(next_redemption_idx, 0);
 
         Ok(())
@@ -1983,7 +1980,7 @@ mod tests {
             bundle_size: 0,
             sorted_items: SmallVec::new(),
             runtime_discount: MixAndMatchRuntimeDiscount::PercentAllItems(Percentage::from(0.0)),
-            application_limit: None,
+            redemption_limit: None,
             monetary_limit_minor: None,
         };
 
@@ -2007,7 +2004,7 @@ mod tests {
             bundle_size: 1,
             sorted_items: smallvec![(0, 100)],
             runtime_discount: MixAndMatchRuntimeDiscount::PercentCheapest(Percentage::from(0.5)),
-            application_limit: None,
+            redemption_limit: None,
             monetary_limit_minor: None,
         };
 
@@ -2231,7 +2228,7 @@ mod tests {
             bundle_size: 0,
             sorted_items: SmallVec::new(),
             runtime_discount: MixAndMatchRuntimeDiscount::PercentAllItems(Percentage::from(0.25)),
-            application_limit: Some(0),
+            redemption_limit: Some(0),
             monetary_limit_minor: None,
         };
 
@@ -2249,7 +2246,7 @@ mod tests {
                 .iter()
                 .map(|c| c.constraint_type.as_str())
                 .collect::<Vec<_>>(),
-            vec!["application count budget (no bundles)"]
+            vec!["redemption count budget (no bundles)"]
         );
 
         let mut pb_one = ProblemVariables::new();
@@ -2266,7 +2263,7 @@ mod tests {
             bundle_size: 0,
             sorted_items: SmallVec::new(),
             runtime_discount: MixAndMatchRuntimeDiscount::PercentAllItems(Percentage::from(0.25)),
-            application_limit: Some(1),
+            redemption_limit: Some(1),
             monetary_limit_minor: None,
         };
 
@@ -2737,7 +2734,7 @@ mod tests {
             bundle_size: 1,
             sorted_items: SmallVec::new(),
             runtime_discount: MixAndMatchRuntimeDiscount::PercentAllItems(Percentage::from(0.0)),
-            application_limit: None,
+            redemption_limit: None,
             monetary_limit_minor: None,
         };
 

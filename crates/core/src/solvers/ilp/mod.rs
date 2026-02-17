@@ -9,7 +9,7 @@ use smallvec::{SmallVec, smallvec};
 
 use crate::{
     items::groups::ItemGroup,
-    promotions::{Promotion, applications::PromotionApplication},
+    promotions::{Promotion, redemptions::PromotionRedemption},
     solvers::{
         Solver, SolverError, SolverResult,
         ilp::{
@@ -114,7 +114,7 @@ impl ILPSolver {
                 affected_items: SmallVec::with_capacity(0),
                 unaffected_items: SmallVec::with_capacity(0),
                 total: Money::from_minor(0, item_group.currency()),
-                promotion_applications: SmallVec::with_capacity(0),
+                promotion_redemptions: SmallVec::with_capacity(0),
             });
         }
 
@@ -340,35 +340,35 @@ fn build_solver_result<'a, 'b, S: Solution>(
     // discounted, by which promotions, and what their final prices are.
     let mut used_items: ItemUsageFlags = smallvec![false; item_group.len()];
     let mut total = Money::from_minor(0, item_group.currency());
-    let mut promotion_applications: SmallVec<[PromotionApplication<'b>; 10]> = SmallVec::new();
+    let mut promotion_redemptions: SmallVec<[PromotionRedemption<'b>; 10]> = SmallVec::new();
     let mut next_redemption_idx: usize = 0;
     let mut affected_items: ItemIndexList = ItemIndexList::new();
 
     // Extract which items each promotion selected and their discounted prices
     for instance in promotion_instances.iter() {
         let apps =
-            instance.calculate_item_applications(solution, item_group, &mut next_redemption_idx)?;
+            instance.calculate_item_redemptions(solution, item_group, &mut next_redemption_idx)?;
 
         let (applied_items, updated_used_items, updated_total) =
-            apply_promotion_applications(item_group.len(), used_items, total, &apps)?;
+            apply_promotion_redemptions(item_group.len(), used_items, total, &apps)?;
 
         affected_items.extend(applied_items);
         used_items = updated_used_items;
         total = updated_total;
 
-        promotion_applications.extend(apps);
+        promotion_redemptions.extend(apps);
     }
 
     let (unaffected_items, total) =
         collect_full_price_items(item_group, solution, item_presence, used_items, total)?;
 
     // At this point every item-group position is accounted for exactly once:
-    // either via a promotion application or via its baseline full-price variable.
+    // either via a promotion redemption or via its baseline full-price variable.
     Ok(SolverResult {
         affected_items,
         unaffected_items,
         total,
-        promotion_applications,
+        promotion_redemptions,
     })
 }
 
@@ -468,9 +468,9 @@ fn collect_full_price_items<'b>(
     Ok((unaffected_items, total))
 }
 
-/// Apply promotion applications to track affected items and accumulate total.
+/// Apply promotion redemptions to track affected items and accumulate total.
 ///
-/// This function processes [`PromotionApplication`] instances, ensuring each item
+/// This function processes [`PromotionRedemption`] instances, ensuring each item
 /// group position is used at most once (via `used_items`), records affected item indices,
 /// and adds the final prices to `total`.
 ///
@@ -480,11 +480,11 @@ fn collect_full_price_items<'b>(
 /// # Errors
 ///
 /// Returns a [`SolverError`] if adding a final price to `total` fails.
-fn apply_promotion_applications<'b>(
+fn apply_promotion_redemptions<'b>(
     item_count: usize,
     used_items: ItemUsageFlags,
     total: Money<'b, Currency>,
-    applications: &[PromotionApplication<'b>],
+    redemptions: &[PromotionRedemption<'b>],
 ) -> Result<AppliedPromotionState<'b>, SolverError> {
     // The indexes of items that are being affected by promotions
     let mut affected_items: ItemIndexList = ItemIndexList::new();
@@ -492,28 +492,28 @@ fn apply_promotion_applications<'b>(
     let mut used_items = used_items;
     let mut total = total;
 
-    for app in applications {
-        if app.item_idx >= item_count {
+    for redemption in redemptions {
+        if redemption.item_idx >= item_count {
             continue;
         }
 
         // If this position is already claimed, skip it to avoid double-counting.
-        if let Some(used) = used_items.get(app.item_idx)
+        if let Some(used) = used_items.get(redemption.item_idx)
             && *used
         {
             continue;
         }
 
         // Commit to consuming this item position as soon as we apply its discount.
-        if let Some(used) = used_items.get_mut(app.item_idx) {
+        if let Some(used) = used_items.get_mut(redemption.item_idx) {
             *used = true;
         }
 
         // Track that this item was included in a promotion.
-        affected_items.push(app.item_idx);
+        affected_items.push(redemption.item_idx);
 
         // Add the final price to the running total.
-        total = total.add(app.final_price)?;
+        total = total.add(redemption.final_price)?;
     }
 
     Ok((affected_items, used_items, total))
@@ -534,8 +534,8 @@ mod tests {
         items::{Item, groups::ItemGroup},
         products::ProductKey,
         promotions::{
-            PromotionKey, applications::PromotionApplication, budget::PromotionBudget, promotion,
-            qualification::Qualification, types::DirectDiscountPromotion,
+            PromotionKey, budget::PromotionBudget, promotion, qualification::Qualification,
+            redemptions::PromotionRedemption, types::DirectDiscountPromotion,
         },
         solvers::ilp::promotions::{ILPPromotion, ILPPromotionVars, PromotionVars},
         tags::string::StringTagCollection,
@@ -642,14 +642,14 @@ mod tests {
             Ok(discounts)
         }
 
-        fn calculate_item_applications<'b>(
+        fn calculate_item_redemptions<'b>(
             &self,
             promotion_key: PromotionKey,
             solution: &dyn Solution,
             item_group: &ItemGroup<'b>,
             next_redemption_idx: &mut usize,
-        ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
-            let mut applications = SmallVec::new();
+        ) -> Result<SmallVec<[PromotionRedemption<'b>; 10]>, SolverError> {
+            let mut redemptions = SmallVec::new();
             let currency = item_group.currency();
 
             for item_idx in 0..item_group.len() {
@@ -662,7 +662,7 @@ mod tests {
                 let redemption_idx = *next_redemption_idx;
                 *next_redemption_idx += 1;
 
-                applications.push(PromotionApplication {
+                redemptions.push(PromotionRedemption {
                     promotion_key,
                     item_idx,
                     redemption_idx,
@@ -671,7 +671,7 @@ mod tests {
                 });
             }
 
-            Ok(applications)
+            Ok(redemptions)
         }
     }
 
@@ -732,14 +732,14 @@ mod tests {
         assert_eq!(subtotal, result.total.to_minor_units());
         assert_eq!(0, result.affected_items.len());
         assert_eq!(3, result.unaffected_items.len());
-        assert!(result.promotion_applications.is_empty());
+        assert!(result.promotion_redemptions.is_empty());
 
         Ok(())
     }
 
     #[test]
-    fn apply_applications_skips_pre_used_positions() -> TestResult {
-        // `apply_applications` uses `used_items` (indexed by item group position)
+    fn apply_redemptions_skips_pre_used_positions() -> TestResult {
+        // `apply_redemptions` uses `used_items` (indexed by item group position)
         // to prevent an item from being claimed by more than one promotion.
         let mut used_items: ItemUsageFlags = smallvec![false; 3];
 
@@ -751,8 +751,8 @@ mod tests {
         // Start from zero so any applied discount would be visible in the result total.
         let total = Money::from_minor(0, GBP);
 
-        // Provide an application for item index 1, but the corresponding position is pre-used above.
-        let applications = [PromotionApplication {
+        // Provide an redemption for item index 1, but the corresponding position is pre-used above.
+        let redemptions = [PromotionRedemption {
             promotion_key: PromotionKey::default(),
             item_idx: 1,
             redemption_idx: 0,
@@ -761,7 +761,7 @@ mod tests {
         }];
 
         let (affected_items, _used_items, total) =
-            apply_promotion_applications(3, used_items, total, &applications)?;
+            apply_promotion_redemptions(3, used_items, total, &redemptions)?;
 
         // Because the only discounted item was already marked "used", nothing should be applied.
         assert!(affected_items.is_empty());
@@ -771,11 +771,11 @@ mod tests {
     }
 
     #[test]
-    fn apply_applications_skips_items_not_in_selection() -> TestResult {
+    fn apply_redemptions_skips_items_not_in_selection() -> TestResult {
         let used_items: ItemUsageFlags = smallvec![false; 2];
         let total = Money::from_minor(0, GBP);
 
-        let applications = [PromotionApplication {
+        let redemptions = [PromotionRedemption {
             promotion_key: PromotionKey::default(),
             item_idx: 99,
             redemption_idx: 0,
@@ -784,7 +784,7 @@ mod tests {
         }];
 
         let (affected_items, _used_items, total) =
-            apply_promotion_applications(2, used_items, total, &applications)?;
+            apply_promotion_redemptions(2, used_items, total, &redemptions)?;
 
         assert!(affected_items.is_empty());
         assert_eq!(total.to_minor_units(), 0);
@@ -893,7 +893,7 @@ mod tests {
     }
 
     #[test]
-    fn solver_populates_promotion_applications_with_correct_details() -> TestResult {
+    fn solver_populates_promotion_redemptions_with_correct_details() -> TestResult {
         let items = test_items_with_tags();
         let item_group = item_group_from_items(items);
 
@@ -907,32 +907,38 @@ mod tests {
         let result = ILPSolver::solve(&promotions, &item_group)?;
 
         // Items 0 and 2 have tag "a", so should be discounted
-        assert_eq!(result.promotion_applications.len(), 2);
+        assert_eq!(result.promotion_redemptions.len(), 2);
 
         // Sort by item_idx to get deterministic ordering for assertions
-        let mut sorted_apps: Vec<_> = result.promotion_applications.iter().collect();
-        sorted_apps.sort_by_key(|a| a.item_idx);
+        let mut sorted_redemptions: Vec<_> = result.promotion_redemptions.iter().collect();
+        sorted_redemptions.sort_by_key(|a| a.item_idx);
 
-        // First application (item 0)
-        let first_app = sorted_apps.first();
-        assert!(first_app.is_some());
+        // First redemption (item 0)
+        let first_redemption = sorted_redemptions.first();
+        assert!(first_redemption.is_some());
 
-        let first_app = first_app.ok_or("Expected first application")?;
-        assert_eq!(first_app.item_idx, 0);
-        assert_eq!(first_app.original_price, Money::from_minor(100, GBP));
-        assert_eq!(first_app.final_price, Money::from_minor(50, GBP));
+        let first_redemption = first_redemption.ok_or("Expected first redemption")?;
+        assert_eq!(first_redemption.item_idx, 0);
+        assert_eq!(first_redemption.original_price, Money::from_minor(100, GBP));
+        assert_eq!(first_redemption.final_price, Money::from_minor(50, GBP));
 
-        // Second application (item 2)
-        let second_app = sorted_apps.get(1);
-        assert!(second_app.is_some());
+        // Second redemption (item 2)
+        let second_redemption = sorted_redemptions.get(1);
+        assert!(second_redemption.is_some());
 
-        let second_app = second_app.ok_or("Expected second application")?;
-        assert_eq!(second_app.item_idx, 2);
-        assert_eq!(second_app.original_price, Money::from_minor(300, GBP));
-        assert_eq!(second_app.final_price, Money::from_minor(50, GBP));
+        let second_redemption = second_redemption.ok_or("Expected second redemption")?;
+        assert_eq!(second_redemption.item_idx, 2);
+        assert_eq!(
+            second_redemption.original_price,
+            Money::from_minor(300, GBP)
+        );
+        assert_eq!(second_redemption.final_price, Money::from_minor(50, GBP));
 
         // Each item should have a unique redemption_idx (DirectDiscountPromotion doesn't bundle)
-        assert_ne!(first_app.redemption_idx, second_app.redemption_idx);
+        assert_ne!(
+            first_redemption.redemption_idx,
+            second_redemption.redemption_idx
+        );
 
         Ok(())
     }
@@ -946,7 +952,7 @@ mod tests {
         assert_eq!(result.total.to_minor_units(), 0);
         assert!(result.affected_items.is_empty());
         assert!(result.unaffected_items.is_empty());
-        assert!(result.promotion_applications.is_empty());
+        assert!(result.promotion_redemptions.is_empty());
 
         Ok(())
     }
@@ -1079,8 +1085,8 @@ mod tests {
         assert_eq!(result1.affected_items, result2.affected_items);
         assert_eq!(result1.unaffected_items, result2.unaffected_items);
         assert_eq!(
-            result1.promotion_applications.len(),
-            result2.promotion_applications.len()
+            result1.promotion_redemptions.len(),
+            result2.promotion_redemptions.len()
         );
 
         Ok(())
@@ -1101,10 +1107,10 @@ mod tests {
         assert_eq!(result.total.to_minor_units(), 301);
         assert_eq!(result.affected_items.as_slice(), &[2]);
         assert_eq!(result.unaffected_items.as_slice(), &[0, 1]);
-        assert_eq!(result.promotion_applications.len(), 1);
-        assert_eq!(result.promotion_applications[0].item_idx, 2);
+        assert_eq!(result.promotion_redemptions.len(), 1);
+        assert_eq!(result.promotion_redemptions[0].item_idx, 2);
         assert_eq!(
-            result.promotion_applications[0].final_price,
+            result.promotion_redemptions[0].final_price,
             Money::from_minor(1, GBP)
         );
 
@@ -1285,8 +1291,8 @@ mod tests {
             result_with_observer.unaffected_items
         );
         assert_eq!(
-            result_no_observer.promotion_applications.len(),
-            result_with_observer.promotion_applications.len()
+            result_no_observer.promotion_redemptions.len(),
+            result_with_observer.promotion_redemptions.len()
         );
 
         Ok(())

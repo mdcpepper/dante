@@ -6,7 +6,12 @@ root: all
 nodes:
   all:
     promotions:
-      [produce_discount, bakery_three_for_two, breakfast_bundle, snack_tiered_threshold]
+      [
+        produce_discount,
+        bakery_three_for_two,
+        breakfast_bundle,
+        snack_tiered_threshold,
+      ]
     output: pass-through
 
 promotions:
@@ -16,7 +21,7 @@ promotions:
     type: direct_discount
     tags: [produce]
     budget:
-      applications: 3
+      redemptions: 3
     discount:
       type: percentage_off
       amount: 15%

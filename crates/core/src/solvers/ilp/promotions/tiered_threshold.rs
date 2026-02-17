@@ -12,7 +12,7 @@ use crate::{
     products::ProductKey,
     promotions::{
         PromotionKey,
-        applications::PromotionApplication,
+        redemptions::PromotionRedemption,
         types::{ThresholdDiscount, TierThreshold, TieredThresholdPromotion},
     },
     solvers::{
@@ -90,14 +90,14 @@ impl QualifyingTier {
 /// Solver variables for a tiered threshold promotion.
 #[derive(Debug)]
 pub struct TieredThresholdPromotionVars {
-    /// Promotion key for observer/application output.
+    /// Promotion key for observer/redemption output.
     promotion_key: PromotionKey,
 
     /// Qualifying tiers with their solver variables.
     qualifying_tiers: SmallVec<[QualifyingTier; 3]>,
 
-    /// Budget: optional max applications.
-    application_limit: Option<u32>,
+    /// Budget: optional max redemptions.
+    redemption_limit: Option<u32>,
 
     /// Budget: optional max total discount value in minor units.
     monetary_limit_minor: Option<i64>,
@@ -224,13 +224,13 @@ impl ILPPromotionVars for TieredThresholdPromotionVars {
         Ok(FxHashMap::default())
     }
 
-    fn calculate_item_applications<'b>(
+    fn calculate_item_redemptions<'b>(
         &self,
         promotion_key: PromotionKey,
         solution: &dyn Solution,
         item_group: &ItemGroup<'b>,
         next_redemption_idx: &mut usize,
-    ) -> Result<SmallVec<[PromotionApplication<'b>; 10]>, SolverError> {
+    ) -> Result<SmallVec<[PromotionRedemption<'b>; 10]>, SolverError> {
         let discounts = self.calculate_item_discounts(solution, item_group)?;
 
         if discounts.is_empty() {
@@ -242,7 +242,7 @@ impl ILPPromotionVars for TieredThresholdPromotionVars {
 
         let currency = item_group.currency();
 
-        let mut applications = SmallVec::new();
+        let mut redemptions = SmallVec::new();
 
         let mut sorted_discounts: SmallVec<[(usize, (i64, i64)); 10]> = discounts
             .iter()
@@ -254,16 +254,16 @@ impl ILPPromotionVars for TieredThresholdPromotionVars {
         sorted_discounts.sort_by_key(|(item_idx, _)| *item_idx);
 
         for (item_idx, (original_minor, final_minor)) in sorted_discounts {
-            applications.push(PromotionApplication {
+            redemptions.push(PromotionRedemption {
                 promotion_key,
                 item_idx,
-                redemption_idx: redemption_idx,
+                redemption_idx,
                 original_price: Money::from_minor(original_minor, currency),
                 final_price: Money::from_minor(final_minor, currency),
             });
         }
 
-        Ok(applications)
+        Ok(redemptions)
     }
 }
 
@@ -665,17 +665,17 @@ impl TieredThresholdPromotionVars {
         state: &mut ILPState,
         observer: &mut dyn ILPObserver,
     ) -> Result<(), SolverError> {
-        // Application count limit: sum(active tiers) <= limit
-        if let Some(application_limit) = self.application_limit {
+        // Redemption count limit: sum(active tiers) <= limit
+        if let Some(redemption_limit) = self.redemption_limit {
             let tier_sum: Expression = self.qualifying_tiers.iter().map(|qt| qt.tier_var).sum();
 
-            let limit_f64 = i64_to_f64_exact(i64::from(application_limit)).ok_or(
-                SolverError::MinorUnitsNotRepresentable(i64::from(application_limit)),
+            let limit_f64 = i64_to_f64_exact(i64::from(redemption_limit)).ok_or(
+                SolverError::MinorUnitsNotRepresentable(i64::from(redemption_limit)),
             )?;
 
             observer.on_promotion_constraint(
                 promotion_key,
-                "application count budget (tier limit)",
+                "redemption count budget (tier limit)",
                 &tier_sum,
                 "<=",
                 limit_f64,
@@ -1478,7 +1478,7 @@ impl ILPPromotion for TieredThresholdPromotion<'_> {
         Ok(Box::new(TieredThresholdPromotionVars {
             promotion_key,
             qualifying_tiers,
-            application_limit: self.budget().application_limit,
+            redemption_limit: self.budget().redemption_limit,
             monetary_limit_minor: self.budget().monetary_limit.map(|v| v.to_minor_units()),
         }))
     }
@@ -2114,7 +2114,7 @@ mod tests {
     }
 
     #[test]
-    fn calculate_item_applications_shares_redemption_idx() -> TestResult {
+    fn calculate_item_redemptions_shares_redemption_idx() -> TestResult {
         let items = [
             Item::with_tags(
                 ProductKey::default(),
@@ -2156,7 +2156,7 @@ mod tests {
 
         let mut next_redemption_idx = 0_usize;
 
-        let apps = vars.as_ref().calculate_item_applications(
+        let apps = vars.as_ref().calculate_item_redemptions(
             PromotionKey::default(),
             &SelectAllSolution,
             &item_group,
@@ -2287,7 +2287,7 @@ mod tests {
         let vars = promo.add_variables(&item_group, &mut state, &mut observer)?;
         vars.add_constraints(promo.key(), &item_group, &mut state, &mut observer)?;
 
-        // Tier-item link (1) + lower threshold spend (1) + application budget (1) + monetary budget (1) = 4
+        // Tier-item link (1) + lower threshold spend (1) + redemption budget (1) + monetary budget (1) = 4
         assert_eq!(observer.promotion_constraints, 4);
 
         Ok(())

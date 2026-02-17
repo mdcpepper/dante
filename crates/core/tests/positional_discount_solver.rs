@@ -51,7 +51,7 @@ fn solver_handles_buy_one_get_one_free() -> TestResult {
 
     // One item full price, one free: 100 + 0 = 100
     assert_eq!(result.total.to_minor_units(), 100);
-    assert_eq!(result.promotion_applications.len(), 2);
+    assert_eq!(result.promotion_redemptions.len(), 2);
 
     Ok(())
 }
@@ -95,7 +95,7 @@ fn solver_handles_three_for_two() -> TestResult {
 
     // Two items full price, one free: 100 + 100 + 0 = 200
     assert_eq!(result.total.to_minor_units(), 200);
-    assert_eq!(result.promotion_applications.len(), 3);
+    assert_eq!(result.promotion_redemptions.len(), 3);
 
     Ok(())
 }
@@ -139,7 +139,7 @@ fn solver_handles_buy_two_get_one_half_off() -> TestResult {
 
     // Two at full price, one at half: 200 + 200 + 100 = 500
     assert_eq!(result.total.to_minor_units(), 500);
-    assert_eq!(result.promotion_applications.len(), 3);
+    assert_eq!(result.promotion_redemptions.len(), 3);
 
     Ok(())
 }
@@ -188,7 +188,7 @@ fn solver_handles_multiple_discount_positions() -> TestResult {
 
     // 2 at full price, 2 at half: 100 + 50 + 100 + 50 = 300
     assert_eq!(result.total.to_minor_units(), 300);
-    assert_eq!(result.promotion_applications.len(), 4);
+    assert_eq!(result.promotion_redemptions.len(), 4);
 
     Ok(())
 }
@@ -227,7 +227,7 @@ fn solver_handles_insufficient_items_for_bundle() -> TestResult {
 
     // Not enough items to form bundle, all at full price
     assert_eq!(result.total.to_minor_units(), 300);
-    assert_eq!(result.promotion_applications.len(), 0);
+    assert_eq!(result.promotion_redemptions.len(), 0);
 
     Ok(())
 }
@@ -276,7 +276,7 @@ fn solver_handles_multiple_bundles() -> TestResult {
 
     // 2 bundles: 50 + 0 + 50 + 0 = 100
     assert_eq!(result.total.to_minor_units(), 100);
-    assert_eq!(result.promotion_applications.len(), 4);
+    assert_eq!(result.promotion_redemptions.len(), 4);
 
     Ok(())
 }
@@ -316,7 +316,7 @@ fn solver_handles_fixed_price_discount() -> TestResult {
     // Bundle should be formed with second item at fixed price
     // Total should be less than full price (550)
     assert!(result.total.to_minor_units() < 550);
-    assert_eq!(result.promotion_applications.len(), 2);
+    assert_eq!(result.promotion_redemptions.len(), 2);
 
     Ok(())
 }
@@ -361,7 +361,7 @@ fn solver_handles_mixed_prices_in_bundle() -> TestResult {
     // Solver optimizes to discount the cheapest: 150 + 100 + 0 = 250
     // Or could be: 200 + 150 + 0 = 350, but solver picks cheapest
     assert!(result.total.to_minor_units() <= 350);
-    assert_eq!(result.promotion_applications.len(), 3);
+    assert_eq!(result.promotion_redemptions.len(), 3);
 
     Ok(())
 }
@@ -399,7 +399,7 @@ fn solver_handles_no_matching_tags() -> TestResult {
 
     // No items match, all at full price
     assert_eq!(result.total.to_minor_units(), 200);
-    assert_eq!(result.promotion_applications.len(), 0);
+    assert_eq!(result.promotion_redemptions.len(), 0);
 
     Ok(())
 }
@@ -438,7 +438,7 @@ fn solver_handles_amount_off_in_bundle() -> TestResult {
 
     // One at full price, one with 30 off: 100 + 70 = 170
     assert_eq!(result.total.to_minor_units(), 170);
-    assert_eq!(result.promotion_applications.len(), 2);
+    assert_eq!(result.promotion_redemptions.len(), 2);
 
     Ok(())
 }

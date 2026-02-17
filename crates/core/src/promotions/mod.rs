@@ -6,10 +6,10 @@ use slotmap::{SecondaryMap, new_key_type};
 
 use crate::{graph::PromotionLayerKey, solvers::ilp::ILPPromotion};
 
-pub mod applications;
 pub mod budget;
 pub mod prelude;
 pub mod qualification;
+pub mod redemptions;
 pub mod types;
 
 new_key_type! {

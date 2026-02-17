@@ -18,7 +18,7 @@ use crate::money::{Money, MoneyRef};
 #[php(name = "Lattice\\Promotions\\Budget")]
 pub struct Budget {
     #[php(prop)]
-    pub application_limit: Option<i64>,
+    pub redemption_limit: Option<i64>,
 
     #[php(prop)]
     pub monetary_limit: Option<MoneyRef>,
@@ -28,28 +28,28 @@ pub struct Budget {
 impl Budget {
     pub fn unlimited() -> Self {
         Self {
-            application_limit: None,
+            redemption_limit: None,
             monetary_limit: None,
         }
     }
 
-    pub fn with_application_limit(limit: i64) -> Self {
+    pub fn with_redemption_limit(limit: i64) -> Self {
         Self {
-            application_limit: Some(limit),
+            redemption_limit: Some(limit),
             monetary_limit: None,
         }
     }
 
     pub fn with_monetary_limit(limit: MoneyRef) -> Self {
         Self {
-            application_limit: None,
+            redemption_limit: None,
             monetary_limit: Some(limit),
         }
     }
 
-    pub fn with_both_limits(application: i64, monetary: MoneyRef) -> Self {
+    pub fn with_both_limits(redemption: i64, monetary: MoneyRef) -> Self {
         Self {
-            application_limit: Some(application),
+            redemption_limit: Some(redemption),
             monetary_limit: Some(monetary),
         }
     }
@@ -109,18 +109,18 @@ impl TryFrom<&BudgetRef> for Budget {
             ));
         };
 
-        let application_limit = obj
-            .get_property::<Option<i64>>("applicationLimit")
-            .map_err(|_| {
-                PhpException::default("Budget application_limit is invalid.".to_string())
-            })?;
+        let redemption_limit =
+            obj.get_property::<Option<i64>>("redemptionLimit")
+                .map_err(|_| {
+                    PhpException::default("Budget redemption_limit is invalid.".to_string())
+                })?;
 
         let monetary_limit = obj
             .get_property::<Option<MoneyRef>>("monetaryLimit")
             .map_err(|_| PhpException::default("Budget monetary_limit is invalid.".to_string()))?;
 
         Ok(Budget {
-            application_limit,
+            redemption_limit,
             monetary_limit,
         })
     }
@@ -156,12 +156,12 @@ impl TryFrom<Budget> for PromotionBudget<'static> {
     type Error = PhpException;
 
     fn try_from(budget: Budget) -> Result<Self, Self::Error> {
-        let application_limit = budget
-            .application_limit
+        let redemption_limit = budget
+            .redemption_limit
             .map(|limit| {
                 u32::try_from(limit).map_err(|_| {
                     PhpException::default(
-                        "Budget application_limit must be a non-negative 32-bit integer."
+                        "Budget redemption_limit must be a non-negative 32-bit integer."
                             .to_string(),
                     )
                 })
@@ -178,7 +178,7 @@ impl TryFrom<Budget> for PromotionBudget<'static> {
             .transpose()?;
 
         Ok(PromotionBudget {
-            application_limit,
+            redemption_limit,
             monetary_limit,
         })
     }
@@ -197,7 +197,7 @@ impl From<PromotionBudget<'static>> for Budget {
         });
 
         Self {
-            application_limit: budget.application_limit.map(i64::from),
+            redemption_limit: budget.redemption_limit.map(i64::from),
             monetary_limit,
         }
     }
