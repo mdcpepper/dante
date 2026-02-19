@@ -2460,7 +2460,7 @@ dependencies = [
 
 [[package]]
 name = "lattice"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2484,7 +2484,7 @@ dependencies = [
 
 [[package]]
 name = "lattice-css-build"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2493,7 +2493,7 @@ dependencies = [
 
 [[package]]
 name = "lattice-demo"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "console_error_panic_hook",
  "humanize-duration",
@@ -2514,7 +2514,7 @@ dependencies = [
 
 [[package]]
 name = "lattice-json"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "clap",
  "dotenvy",
@@ -2531,7 +2531,7 @@ dependencies = [
 
 [[package]]
 name = "lattice-php-ext"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "decimal-percentage",
  "ext-php-rs",
