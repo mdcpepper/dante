@@ -24,6 +24,11 @@ impl From<ProductsRepositoryError> for StatusError {
 
                 StatusError::internal_server_error()
             }
+            ProductsRepositoryError::NotFound => {
+                error!("product not found");
+
+                StatusError::not_found()
+            }
         }
     }
 }
