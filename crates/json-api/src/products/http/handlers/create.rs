@@ -41,6 +41,7 @@ pub(crate) struct ProductCreatedResponse {
 #[endpoint(
     tags("products"),
     summary = "Create Product",
+    security(("bearer_auth" = [])),
     responses(
         (status_code = StatusCode::CREATED, description = "Product created"),
         (status_code = StatusCode::CONFLICT, description = "Product already exists"),

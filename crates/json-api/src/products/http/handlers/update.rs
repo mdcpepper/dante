@@ -42,6 +42,7 @@ pub(crate) struct ProductUpdatedResponse {
 #[endpoint(
     tags("products"),
     summary = "Update Product",
+    security(("bearer_auth" = [])),
     responses(
         (status_code = StatusCode::OK, description = "Product updated"),
         (status_code = StatusCode::NOT_FOUND, description = "Product not found"),

@@ -11,6 +11,7 @@ use crate::{extensions::*, state::State};
 #[endpoint(
     tags("products"),
     summary = "Delete Product",
+    security(("bearer_auth" = [])),
     responses(
         (status_code = StatusCode::OK, description = "Product deleted"),
         (status_code = StatusCode::NOT_FOUND, description = "Product not found"),

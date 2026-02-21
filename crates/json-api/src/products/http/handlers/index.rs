@@ -47,7 +47,11 @@ pub(crate) struct ProductsResponse {
 /// Product Index Handler
 ///
 /// Returns a list of products.
-#[endpoint(tags("products"), summary = "List Products")]
+#[endpoint(
+    tags("products"),
+    summary = "List Products",
+    security(("bearer_auth" = []))
+)]
 pub(crate) async fn handler(depot: &mut Depot) -> Result<Json<ProductsResponse>, StatusError> {
     let state = depot.obtain_or_500::<Arc<State>>()?;
     let tenant = depot.tenant_uuid_or_401()?;

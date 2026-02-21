@@ -9,12 +9,13 @@ use sqlx::{
     Error, FromRow, PgPool, Postgres, Row,
     error::{DatabaseError, ErrorKind},
     postgres::PgRow,
-    query, query_as,
+    query, query_as, query_scalar,
 };
 use thiserror::Error;
 use uuid::Uuid;
 
 use crate::{
+    database::SET_TENANT_CONTEXT_SQL,
     products::models::{NewProduct, Product, ProductUpdate},
     tenants::TenantUuid,
 };
@@ -74,6 +75,25 @@ impl PgProductsRepository {
     pub(crate) fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+
+    async fn begin_tenant_transaction(
+        &self,
+        tenant: TenantUuid,
+    ) -> Result<sqlx::Transaction<'static, Postgres>, ProductsRepositoryError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(ProductsRepositoryError::from)?;
+
+        query_scalar::<Postgres, String>(SET_TENANT_CONTEXT_SQL)
+            .bind(tenant.as_uuid().to_string())
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(ProductsRepositoryError::from)?;
+
+        Ok(tx)
+    }
 }
 
 impl<'r> FromRow<'r, PgRow> for Product {
@@ -103,11 +123,16 @@ impl ProductsRepository for PgProductsRepository {
         &self,
         tenant: TenantUuid,
     ) -> Result<Vec<Product>, ProductsRepositoryError> {
-        query_as::<Postgres, Product>(GET_PRODUCTS_SQL)
-            .bind(tenant.as_uuid())
-            .fetch_all(&self.pool)
+        let mut tx = self.begin_tenant_transaction(tenant).await?;
+
+        let products = query_as::<Postgres, Product>(GET_PRODUCTS_SQL)
+            .fetch_all(&mut *tx)
             .await
-            .map_err(Into::into)
+            .map_err(ProductsRepositoryError::from)?;
+
+        tx.commit().await.map_err(ProductsRepositoryError::from)?;
+
+        Ok(products)
     }
 
     async fn create_product(
@@ -115,13 +140,18 @@ impl ProductsRepository for PgProductsRepository {
         tenant: TenantUuid,
         product: NewProduct,
     ) -> Result<Product, ProductsRepositoryError> {
-        query_as::<Postgres, Product>(CREATE_PRODUCT_SQL)
+        let mut tx = self.begin_tenant_transaction(tenant).await?;
+
+        let created = query_as::<Postgres, Product>(CREATE_PRODUCT_SQL)
             .bind(product.uuid)
             .bind(i64::try_from(product.price)?)
-            .bind(tenant.as_uuid())
-            .fetch_one(&self.pool)
+            .fetch_one(&mut *tx)
             .await
-            .map_err(Into::into)
+            .map_err(ProductsRepositoryError::from)?;
+
+        tx.commit().await.map_err(ProductsRepositoryError::from)?;
+
+        Ok(created)
     }
 
     async fn update_product(
@@ -130,13 +160,18 @@ impl ProductsRepository for PgProductsRepository {
         uuid: Uuid,
         update: ProductUpdate,
     ) -> Result<Product, ProductsRepositoryError> {
-        query_as::<Postgres, Product>(UPDATE_PRODUCT_SQL)
+        let mut tx = self.begin_tenant_transaction(tenant).await?;
+
+        let updated = query_as::<Postgres, Product>(UPDATE_PRODUCT_SQL)
             .bind(uuid)
-            .bind(tenant.as_uuid())
             .bind(i64::try_from(update.price)?)
-            .fetch_one(&self.pool)
+            .fetch_one(&mut *tx)
             .await
-            .map_err(Into::into)
+            .map_err(ProductsRepositoryError::from)?;
+
+        tx.commit().await.map_err(ProductsRepositoryError::from)?;
+
+        Ok(updated)
     }
 
     async fn delete_product(
@@ -144,16 +179,19 @@ impl ProductsRepository for PgProductsRepository {
         tenant: TenantUuid,
         uuid: Uuid,
     ) -> Result<(), ProductsRepositoryError> {
+        let mut tx = self.begin_tenant_transaction(tenant).await?;
+
         let result = query(DELETE_PRODUCT_SQL)
             .bind(uuid)
-            .bind(tenant.as_uuid())
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await
             .map_err(ProductsRepositoryError::from)?;
 
         if result.rows_affected() == 0 {
             return Err(ProductsRepositoryError::NotFound);
         }
+
+        tx.commit().await.map_err(ProductsRepositoryError::from)?;
 
         Ok(())
     }

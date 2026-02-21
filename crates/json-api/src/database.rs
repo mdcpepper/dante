@@ -2,6 +2,9 @@
 
 use sqlx::PgPool;
 
+pub(crate) const SET_TENANT_CONTEXT_SQL: &str =
+    "SELECT set_config('app.current_tenant_uuid', $1, true)";
+
 /// Connect to `PostgreSQL`.
 ///
 /// # Errors

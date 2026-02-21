@@ -4,7 +4,11 @@ use std::process;
 
 use salvo::{
     affix_state::inject,
-    oapi::{OpenApi, swagger_ui::SwaggerUi},
+    oapi::{
+        OpenApi,
+        security::{Http, HttpAuthScheme, SecurityScheme},
+        swagger_ui::SwaggerUi,
+    },
     prelude::*,
     trailing_slash::remove_slash,
 };
@@ -94,7 +98,12 @@ pub async fn main() {
             ),
         );
 
-    let doc = OpenApi::new("Lattice API", "0.1.0").merge_router(&router);
+    let doc = OpenApi::new("Lattice API", "0.3.0")
+        .add_security_scheme(
+            "bearer_auth",
+            SecurityScheme::Http(Http::new(HttpAuthScheme::Bearer)),
+        )
+        .merge_router(&router);
 
     let router = router
         .push(doc.into_router("/api-doc/openapi.json"))
