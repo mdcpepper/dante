@@ -4,7 +4,7 @@ use sqlx::Error;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub(crate) enum AuthRepositoryError {
+pub enum AuthRepositoryError {
     #[error("token not found")]
     NotFound,
 

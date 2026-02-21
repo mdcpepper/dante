@@ -3,7 +3,7 @@
 use std::process;
 
 use clap::{Args, Parser, Subcommand};
-use lattice_json::{
+use lattice_app::{
     database,
     tenants::{
         models::NewTenant,

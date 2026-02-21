@@ -6,7 +6,9 @@ use salvo::{http::header::AUTHORIZATION, prelude::*};
 use sha2::{Digest, Sha256};
 use tracing::error;
 
-use crate::{auth::AuthRepositoryError, extensions::*, state::State};
+use lattice_app::auth::AuthRepositoryError;
+
+use crate::{extensions::*, state::State};
 
 #[salvo::handler]
 pub(crate) async fn handler(
@@ -32,7 +34,7 @@ pub(crate) async fn handler(
         }
     };
 
-    let tenant_uuid = match state.auth.find_tenant_by_token_hash(&token_hash).await {
+    let tenant_uuid = match state.app.auth.find_tenant_by_token_hash(&token_hash).await {
         Ok(tenant_uuid) => tenant_uuid,
         Err(AuthRepositoryError::NotFound) => {
             res.render(StatusError::unauthorized().brief("Invalid API token"));
@@ -76,9 +78,9 @@ mod tests {
     use testresult::TestResult;
     use uuid::Uuid;
 
-    use crate::{
-        auth::MockAuthRepository, tenants::models::TenantUuid, test_helpers::state_with_auth,
-    };
+    use lattice_app::{auth::MockAuthRepository, tenants::models::TenantUuid};
+
+    use crate::test_helpers::state_with_auth;
 
     use super::*;
 

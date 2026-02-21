@@ -15,6 +15,8 @@ use salvo::{
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
+use lattice_app::context::AppContext;
+
 use crate::{config::ServerConfig, state::State};
 
 #[cfg(not(target_env = "msvc"))]
@@ -26,16 +28,13 @@ static GLOBAL: Jemalloc = Jemalloc;
 
 mod auth;
 mod config;
-mod database;
 mod extensions;
 mod healthcheck;
 mod products;
 mod shutdown;
 mod state;
-mod tenants;
 #[cfg(test)]
 mod test_helpers;
-mod uuids;
 
 /// Lattice JSON API Server entry point
 ///
@@ -71,10 +70,10 @@ pub async fn main() {
     // Bind server
     let listener = TcpListener::new(addr).bind().await;
 
-    let pool = match database::connect(&config.database_url).await {
-        Ok(pool) => pool,
-        Err(db_error) => {
-            error!("failed to connect to postgres: {db_error}");
+    let app = match AppContext::from_database_url(&config.database_url).await {
+        Ok(app) => app,
+        Err(init_error) => {
+            error!("failed to initialize app context: {init_error}");
 
             process::exit(1);
         }
@@ -83,7 +82,7 @@ pub async fn main() {
     let router = Router::new()
         .hoop(CatchPanic::new())
         .hoop(remove_slash())
-        .hoop(inject(State::from_pool(pool)))
+        .hoop(inject(State::from_app_context(app)))
         .push(Router::with_path("healthcheck").get(healthcheck::handler))
         .push(
             Router::new().hoop(auth::middleware::handler).push(

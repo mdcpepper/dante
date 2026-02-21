@@ -9,15 +9,15 @@ use std::{
 
 use uuid::Uuid;
 
-pub(crate) struct TypedUuid<T>(Uuid, PhantomData<T>);
+pub struct TypedUuid<T>(Uuid, PhantomData<T>);
 
 impl<T> TypedUuid<T> {
-    pub(crate) const fn from_uuid(uuid: Uuid) -> Self {
+    pub const fn from_uuid(uuid: Uuid) -> Self {
         Self(uuid, PhantomData)
     }
 
     #[must_use]
-    pub(crate) const fn into_uuid(self) -> Uuid {
+    pub const fn into_uuid(self) -> Uuid {
         self.0
     }
 }

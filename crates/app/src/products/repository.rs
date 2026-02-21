@@ -66,13 +66,13 @@ impl From<Error> for ProductsRepositoryError {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct PgProductsRepository {
+pub struct PgProductsRepository {
     pool: PgPool,
 }
 
 impl PgProductsRepository {
     #[must_use]
-    pub(crate) fn new(pool: PgPool) -> Self {
+    pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 
@@ -209,7 +209,7 @@ mod tests {
 
 #[automock]
 #[async_trait]
-pub(crate) trait ProductsRepository: Send + Sync {
+pub trait ProductsRepository: Send + Sync {
     /// Retrieves all products.
     async fn get_products(
         &self,

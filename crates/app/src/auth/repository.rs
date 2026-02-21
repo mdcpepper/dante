@@ -13,13 +13,13 @@ use crate::{
 const FIND_TENANT_BY_TOKEN_HASH_SQL: &str = include_str!("sql/find_tenant_by_token_hash.sql");
 
 #[derive(Debug, Clone)]
-pub(crate) struct PgAuthRepository {
+pub struct PgAuthRepository {
     pool: PgPool,
 }
 
 impl PgAuthRepository {
     #[must_use]
-    pub(crate) fn new(pool: PgPool) -> Self {
+    pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 }
@@ -52,7 +52,7 @@ impl AuthRepository for PgAuthRepository {
 
 #[automock]
 #[async_trait]
-pub(crate) trait AuthRepository: Send + Sync {
+pub trait AuthRepository: Send + Sync {
     async fn find_tenant_by_token_hash(
         &self,
         hash: &str,

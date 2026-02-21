@@ -5,7 +5,7 @@ use std::sync::Arc;
 use salvo::{oapi::extract::PathParam, prelude::*};
 use uuid::Uuid;
 
-use crate::{extensions::*, state::State};
+use crate::{extensions::*, products::errors::into_status_error, state::State};
 
 /// Delete Product Handler
 #[endpoint(
@@ -27,10 +27,11 @@ pub(crate) async fn handler(
     let tenant = depot.tenant_uuid_or_401()?;
 
     state
+        .app
         .products
         .delete_product(tenant, uuid.into_inner())
         .await
-        .map_err(StatusError::from)?;
+        .map_err(into_status_error)?;
 
     Ok(StatusCode::OK)
 }
@@ -40,10 +41,9 @@ mod tests {
     use salvo::test::TestClient;
     use testresult::TestResult;
 
-    use crate::{
-        products::{MockProductsRepository, ProductsRepositoryError},
-        test_helpers::{TEST_TENANT_UUID, products_service},
-    };
+    use lattice_app::products::{MockProductsRepository, ProductsRepositoryError};
+
+    use crate::test_helpers::{TEST_TENANT_UUID, products_service};
 
     use super::{super::tests::*, *};
 

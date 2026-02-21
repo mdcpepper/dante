@@ -6,7 +6,9 @@ use salvo::{oapi::ToSchema, prelude::*};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{extensions::*, products::models::Product, state::State};
+use lattice_app::products::models::Product;
+
+use crate::{extensions::*, state::State};
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub(crate) struct ProductResponse {
@@ -57,6 +59,7 @@ pub(crate) async fn handler(depot: &mut Depot) -> Result<Json<ProductsResponse>,
     let tenant = depot.tenant_uuid_or_401()?;
 
     let products = state
+        .app
         .products
         .get_products(tenant)
         .await
@@ -70,14 +73,11 @@ pub(crate) async fn handler(depot: &mut Depot) -> Result<Json<ProductsResponse>,
 #[cfg(test)]
 mod tests {
     use jiff::Timestamp;
+    use lattice_app::products::{MockProductsRepository, ProductsRepositoryError};
     use salvo::test::{ResponseExt, TestClient};
     use testresult::TestResult;
 
-    use crate::{
-        products::MockProductsRepository,
-        products::ProductsRepositoryError,
-        test_helpers::{TEST_TENANT_UUID, products_service},
-    };
+    use crate::test_helpers::{TEST_TENANT_UUID, products_service};
 
     use super::*;
 

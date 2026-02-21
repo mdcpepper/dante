@@ -5,10 +5,12 @@ use std::sync::Arc;
 use salvo::{affix_state::inject, prelude::*};
 use uuid::Uuid;
 
-use crate::{
-    auth::MockAuthRepository, extensions::*, products::MockProductsRepository, state::State,
+use lattice_app::{
+    auth::MockAuthRepository, context::AppContext, products::MockProductsRepository,
     tenants::models::TenantUuid,
 };
+
+use crate::{extensions::*, state::State};
 
 pub(crate) const TEST_TENANT_UUID: TenantUuid = TenantUuid::from_uuid(Uuid::nil());
 
@@ -43,11 +45,17 @@ fn strict_products_mock() -> MockProductsRepository {
 }
 
 pub(crate) fn state_with_products(products: MockProductsRepository) -> Arc<State> {
-    Arc::new(State::new(Arc::new(products), Arc::new(strict_auth_mock())))
+    Arc::new(State::new(AppContext::new(
+        Arc::new(products),
+        Arc::new(strict_auth_mock()),
+    )))
 }
 
 pub(crate) fn state_with_auth(auth: MockAuthRepository) -> Arc<State> {
-    Arc::new(State::new(Arc::new(strict_products_mock()), Arc::new(auth)))
+    Arc::new(State::new(AppContext::new(
+        Arc::new(strict_products_mock()),
+        Arc::new(auth),
+    )))
 }
 
 pub(crate) fn products_service(products: MockProductsRepository, route: Router) -> Service {

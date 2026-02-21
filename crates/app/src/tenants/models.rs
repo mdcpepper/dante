@@ -5,10 +5,9 @@ use uuid::Uuid;
 
 use crate::uuids::TypedUuid;
 
-pub(crate) type TenantUuid = TypedUuid<Tenant>;
+pub type TenantUuid = TypedUuid<Tenant>;
 
-#[expect(dead_code, reason = "temporary backwards-compatible alias")]
-pub(crate) type TennantUuid = TenantUuid;
+pub type TennantUuid = TenantUuid;
 
 /// Tenant Model
 #[derive(Debug, Clone)]

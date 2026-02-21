@@ -13,7 +13,9 @@ use salvo::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{extensions::*, products::models::ProductUpdate, state::State};
+use lattice_app::products::models::ProductUpdate;
+
+use crate::{extensions::*, products::errors::into_status_error, state::State};
 
 /// Update Product Request
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -21,10 +23,8 @@ pub(crate) struct UpdateProductRequest {
     pub price: u64,
 }
 
-impl From<JsonBody<UpdateProductRequest>> for ProductUpdate {
-    fn from(json: JsonBody<UpdateProductRequest>) -> Self {
-        let request = json.into_inner();
-
+impl From<UpdateProductRequest> for ProductUpdate {
+    fn from(request: UpdateProductRequest) -> Self {
         ProductUpdate {
             price: request.price,
         }
@@ -61,10 +61,11 @@ pub(crate) async fn handler(
     let uuid = uuid.into_inner();
 
     let price = state
+        .app
         .products
-        .update_product(tenant, uuid, json.into())
+        .update_product(tenant, uuid, json.into_inner().into())
         .await
-        .map_err(StatusError::from)?
+        .map_err(into_status_error)?
         .price;
 
     res.add_header(LOCATION, format!("/products/{uuid}"), true)
@@ -80,10 +81,9 @@ mod tests {
     use serde_json::json;
     use testresult::TestResult;
 
-    use crate::{
-        products::{MockProductsRepository, ProductsRepositoryError},
-        test_helpers::{TEST_TENANT_UUID, products_service},
-    };
+    use lattice_app::products::{MockProductsRepository, ProductsRepositoryError};
+
+    use crate::test_helpers::{TEST_TENANT_UUID, products_service};
 
     use super::{super::tests::*, *};
 
