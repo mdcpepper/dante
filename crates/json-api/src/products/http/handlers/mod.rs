@@ -1,6 +1,7 @@
 //! Product Handlers
 
 pub(crate) mod create;
+pub(crate) mod delete;
 pub(crate) mod index;
 pub(crate) mod update;
 

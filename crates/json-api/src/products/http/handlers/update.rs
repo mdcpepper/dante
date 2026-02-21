@@ -108,6 +108,10 @@ mod tests {
             .withf(move |u, update| *u == uuid && *update == ProductUpdate { price: 200 })
             .return_once(move |_, _| Ok(product));
 
+        repo.expect_create_product().never();
+        repo.expect_get_products().never();
+        repo.expect_delete_product().never();
+
         let mut res = TestClient::put(format!("http://example.com/products/{uuid}"))
             .json(&json!({ "price": 200 }))
             .send(&make_service(repo))
@@ -124,6 +128,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_update_product_invalid_uuid_returns_400() -> TestResult {
+        let mut repo = MockProductsRepository::new();
+
+        repo.expect_create_product().never();
+        repo.expect_get_products().never();
+        repo.expect_update_product().never();
+        repo.expect_delete_product().never();
+
+        let res = TestClient::put("http://example.com/products/123")
+            .send(&make_service(repo))
+            .await;
+
+        assert_eq!(res.status_code, Some(StatusCode::BAD_REQUEST));
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_update_product_invalid_price_returns_400() -> TestResult {
         let uuid = Uuid::now_v7();
 
@@ -133,6 +155,10 @@ mod tests {
             .once()
             .withf(move |u, update| *u == uuid && *update == ProductUpdate { price: 200 })
             .return_once(|_, _| Err(ProductsRepositoryError::InvalidData));
+
+        repo.expect_create_product().never();
+        repo.expect_get_products().never();
+        repo.expect_delete_product().never();
 
         let res = TestClient::put(format!("http://example.com/products/{uuid}"))
             .json(&json!({ "price": 200 }))

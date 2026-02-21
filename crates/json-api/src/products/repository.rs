@@ -9,7 +9,7 @@ use sqlx::{
     Error, FromRow, PgPool, Postgres, Row,
     error::{DatabaseError, ErrorKind},
     postgres::PgRow,
-    query_as,
+    query, query_as,
 };
 use thiserror::Error;
 use uuid::Uuid;
@@ -19,11 +19,15 @@ use crate::products::models::{NewProduct, Product, ProductUpdate};
 const GET_PRODUCTS_SQL: &str = include_str!("sql/get_products.sql");
 const CREATE_PRODUCT_SQL: &str = include_str!("sql/create_product.sql");
 const UPDATE_PRODUCT_SQL: &str = include_str!("sql/update_product.sql");
+const DELETE_PRODUCT_SQL: &str = include_str!("sql/delete_product.sql");
 
 #[derive(Debug, Error)]
 pub enum ProductsRepositoryError {
     #[error("product already exists")]
     AlreadyExists,
+
+    #[error("product not found")]
+    NotFound,
 
     #[error("related resource not found")]
     InvalidReference,
@@ -117,6 +121,20 @@ impl ProductsRepository for PgProductsRepository {
             .await
             .map_err(Into::into)
     }
+
+    async fn delete_product(&self, uuid: Uuid) -> Result<(), ProductsRepositoryError> {
+        let result = query(DELETE_PRODUCT_SQL)
+            .bind(uuid)
+            .execute(&self.pool)
+            .await
+            .map_err(ProductsRepositoryError::from)?;
+
+        if result.rows_affected() == 0 {
+            return Err(ProductsRepositoryError::NotFound);
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -145,4 +163,7 @@ pub(crate) trait ProductsRepository: Send + Sync {
         uuid: Uuid,
         update: ProductUpdate,
     ) -> Result<Product, ProductsRepositoryError>;
+
+    /// Deletes a product with the given UUID.
+    async fn delete_product(&self, uuid: Uuid) -> Result<(), ProductsRepositoryError>;
 }

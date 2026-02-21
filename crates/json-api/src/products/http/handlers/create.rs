@@ -103,6 +103,10 @@ mod tests {
             .withf(move |new| *new == NewProduct { uuid, price: 100 })
             .return_once(move |_| Ok(product));
 
+        repo.expect_get_products().never();
+        repo.expect_update_product().never();
+        repo.expect_delete_product().never();
+
         let mut res = TestClient::post("http://example.com/products")
             .json(&json!({ "uuid": uuid, "price": 100 }))
             .send(&make_service(repo))
@@ -129,6 +133,10 @@ mod tests {
             .withf(move |new| *new == NewProduct { uuid, price: 100 })
             .return_once(|_| Err(ProductsRepositoryError::AlreadyExists));
 
+        repo.expect_get_products().never();
+        repo.expect_update_product().never();
+        repo.expect_delete_product().never();
+
         let res = TestClient::post("http://example.com/products")
             .json(&json!({ "uuid": uuid, "price": 100 }))
             .send(&make_service(repo))
@@ -149,6 +157,10 @@ mod tests {
             .once()
             .withf(move |new| *new == NewProduct { uuid, price: 100 })
             .return_once(|_| Err(ProductsRepositoryError::InvalidData));
+
+        repo.expect_get_products().never();
+        repo.expect_update_product().never();
+        repo.expect_delete_product().never();
 
         let res = TestClient::post("http://example.com/products")
             .json(&json!({ "uuid": uuid, "price": 100 }))

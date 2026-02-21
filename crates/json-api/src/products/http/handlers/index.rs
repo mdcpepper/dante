@@ -98,6 +98,10 @@ mod tests {
 
         repo.expect_get_products().once().return_once(|| Ok(vec![]));
 
+        repo.expect_create_product().never();
+        repo.expect_update_product().never();
+        repo.expect_delete_product().never();
+
         let res = TestClient::get("http://example.com/products")
             .send(&make_service(repo))
             .await;
@@ -112,6 +116,10 @@ mod tests {
         let mut repo = MockProductsRepository::new();
 
         repo.expect_get_products().once().return_once(|| Ok(vec![]));
+
+        repo.expect_create_product().never();
+        repo.expect_update_product().never();
+        repo.expect_delete_product().never();
 
         let response: ProductsResponse = TestClient::get("http://example.com/products")
             .send(&make_service(repo))
@@ -135,6 +143,10 @@ mod tests {
             .once()
             .return_once(move || Ok(vec![make_product(uuid_a, 100), make_product(uuid_b, 200)]));
 
+        repo.expect_create_product().never();
+        repo.expect_update_product().never();
+        repo.expect_delete_product().never();
+
         let response: ProductsResponse = TestClient::get("http://example.com/products")
             .send(&make_service(repo))
             .await
@@ -155,6 +167,10 @@ mod tests {
         repo.expect_get_products()
             .once()
             .return_once(|| Err(ProductsRepositoryError::InvalidData));
+
+        repo.expect_create_product().never();
+        repo.expect_update_product().never();
+        repo.expect_delete_product().never();
 
         let res = TestClient::get("http://example.com/products")
             .send(&make_service(repo))
