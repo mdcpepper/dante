@@ -18,5 +18,24 @@ test-extension: build-extension
 
 test: test-rust test-extension
 
-watch:
-    docker compose --profile dev up json-api-dev
+dev:
+    docker compose up -d --wait postgres
+    docker compose --profile dev up --build --force-recreate json-api-dev demo
+
+remove:
+    docker compose --profile dev down --volumes --remove-orphans --rmi local
+
+sqlx *args='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    db_url="${DATABASE_ADMIN_URL_DOCKER:-postgresql://${POSTGRES_USER:-lattice_user}:${POSTGRES_PASSWORD:-lattice_password}@postgres:5432/${POSTGRES_DB:-lattice_db}}"
+    docker compose --profile dev run --rm --build --quiet-build -T -e DATABASE_URL="$db_url" json-api-dev sqlx "$@"
+
+migrate:
+    just sqlx migrate run
+
+cli *args='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    db_url="${DATABASE_ADMIN_URL:-postgresql://${POSTGRES_USER:-lattice_user}:${POSTGRES_PASSWORD:-lattice_password}@localhost:5432/${POSTGRES_DB:-lattice_db}}"
+    DATABASE_URL="$db_url" cargo run --package lattice-app -- "$@"
